@@ -72,6 +72,8 @@ export class Vehicle {
   absActive = false;
   /** true when driven by a physical steering wheel: no speed-sensitive reduction */
   directSteer = false;
+  /** grip multiplier for weather (1 = dry, ~0.72 = rain) */
+  weatherGrip = 1;
   tcsActive = false;
   steerAngle = 0;
   speed = 0; // forward speed m/s
@@ -399,7 +401,16 @@ export class Vehicle {
     const vC = this.pointVelocity(w.contactPoint, this.tmp);
     const vx = vC.dot(dirs.fw);
     const vy = vC.dot(dirs.rw);
-    return tyreForce(this.tyres, w.fz, vx, vy, w.omega, w.radius, SURFACE_GRIP[w.surface], w.force);
+    return tyreForce(
+      this.tyres,
+      w.fz,
+      vx,
+      vy,
+      w.omega,
+      w.radius,
+      SURFACE_GRIP[w.surface] * this.weatherGrip,
+      w.force,
+    );
   }
 
   private applyBrake(w: WheelState, i: number, dt: number, inertia: number): void {

@@ -220,6 +220,56 @@ function makeSoftCircle(): CanvasTexture {
   return new CanvasTexture(c);
 }
 
+const RAIN_COUNT = 2500;
+
+/** Falling rain streaks that follow the camera. */
+export class RainParticles {
+  readonly points: Points;
+  private readonly pos: Float32Array;
+  private readonly box = 28;
+  private readonly height = 24;
+
+  constructor() {
+    this.pos = new Float32Array(RAIN_COUNT * 3);
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      this.pos[i * 3] = (Math.random() - 0.5) * this.box * 2;
+      this.pos[i * 3 + 1] = Math.random() * this.height;
+      this.pos[i * 3 + 2] = (Math.random() - 0.5) * this.box * 2;
+    }
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(35048));
+    const mat = new ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { map: { value: makeSoftCircle() } },
+      vertexShader: `void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = 90.0 / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `uniform sampler2D map; void main(){ vec2 uv = gl_PointCoord; uv.y = (uv.y - 0.5) * 0.25 + 0.5; float a = texture2D(map, uv).a; gl_FragColor = vec4(0.75, 0.8, 0.9, a * 0.5); }`,
+    });
+    this.points = new Points(geo, mat);
+    this.points.frustumCulled = false;
+    this.points.renderOrder = 4;
+  }
+
+  update(dt: number, cameraPos: Vector3, wind: Vector3): void {
+    const fall = 14 * dt;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      let y = this.pos[i * 3 + 1] - fall;
+      let x = this.pos[i * 3] + wind.x * dt;
+      let z = this.pos[i * 3 + 2] + wind.z * dt;
+      if (y < 0) y += this.height;
+      if (x > this.box) x -= this.box * 2;
+      if (x < -this.box) x += this.box * 2;
+      if (z > this.box) z -= this.box * 2;
+      if (z < -this.box) z += this.box * 2;
+      this.pos[i * 3] = x;
+      this.pos[i * 3 + 1] = y;
+      this.pos[i * 3 + 2] = z;
+    }
+    this.points.position.set(cameraPos.x, cameraPos.y - 6, cameraPos.z);
+    (this.points.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
+  }
+}
+
 /** Flat ground disc used by the showroom. */
 export function makeShowroomFloor(): Mesh {
   const mat = new MeshBasicMaterial({

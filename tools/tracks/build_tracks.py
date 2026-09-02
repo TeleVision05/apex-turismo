@@ -68,18 +68,19 @@ OVERRIDES = {
     # would otherwise drop it as a paddock-access road, breaking loop
     # connectivity (way id from cache/brands_hatch.json).
     "brands_hatch": {"keep_way_ids": {25804653}},
-    # NOTE (investigated 2026-09-01): tried excluding
-    # "sprintstrecke|rallycross|nordschleife" by name here because the
-    # unmodified walk's ~4587 m loop passes through ways literally named
-    # "Nurburgring Sprintstrecke" and "Rallycross circuit". That exclusion
-    # broke the loop entirely (the GP-Strecke's own connecting segments
-    # dead-end without them), so it was reverted. The corners the walk does
-    # hit (Michael-Schumacher-S, Goodyear-Kehre, Ford-Kurve, NGK-Schikane)
-    # are genuine modern GP-Strecke corners, consistent with the GP-Strecke
-    # and Sprintstrecke sharing a physical section of tarmac that OSM only
-    # tagged under one of the two names. Length is -10.9% vs the real 5148 m
-    # (within the 15% tolerance) -- verify visually in previews/nurburgring_gp.png
-    # before trusting this one.
+    # A 3000 m radius pulls in the Nordschleife, Sprintstrecke, a rallycross
+    # circuit and the Mullenbachschleife, all sharing junction nodes with the
+    # GP-Strecke; the walker kept shortcutting onto them (confirmed
+    # 2026-09-01: a ~4587 m loop through "Nurburgring Sprintstrecke" +
+    # "Rallycross circuit" ways, a visibly wrong out-and-back spur in the
+    # preview). Shrinking the search radius to 1500 m mostly excludes the
+    # Nordschleife/Sprintstrecke loops geographically, and excluding the
+    # remaining overlap by name isolates the compact 5148 m GP loop through
+    # the Mercedes Arena / Ford-Kurve hairpins.
+    "nurburgring_gp": {
+        "radius_m": 1500,
+        "extra_drop_regex": r"nordschleife|rallycross|sprint|m[uü]llenbach|kart|test",
+    },
 }
 
 
@@ -87,6 +88,7 @@ def build_one(spec, elevation_fn=None):
     tid, name, country, length_m, direction, width_m, lat, lon, radius_m = spec
     override = OVERRIDES.get(tid, {})
     elevation_fn = elevation_fn or fetch_elevations_strided
+    radius_m = override.get("radius_m", radius_m)
 
     if "fallback_name_regex" in override:
         q = road_fallback_query(lat, lon, radius_m, override["fallback_name_regex"])

@@ -100,6 +100,7 @@ export class RaceSession {
       const side = i % 2 === 0 ? -1 : 1;
       const s = track.length - 12 - row * 10 - (side < 0 ? 0 : 5);
       v.placeAt(s, side * 2.8);
+      v.weatherGrip = config.weather === 'rain' ? 0.72 : 1;
       if (config.rollingStart) {
         v.vel.copy(v.forward).multiplyScalar(22);
         for (const w of v.wheels) w.omega = 22 / w.radius;

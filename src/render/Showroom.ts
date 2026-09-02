@@ -80,7 +80,7 @@ export class Showroom {
     if (this.car) this.car.root.rotation.y = this.angle;
     const cam = this.renderer.camera;
     cam.position.set(4.4, 1.35, -5.2);
-    cam.lookAt(-3.4, 0.45, 0);
+    cam.lookAt(3.2, 0.4, 0);
   }
 
   dispose(): void {

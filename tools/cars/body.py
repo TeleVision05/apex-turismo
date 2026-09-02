@@ -259,7 +259,12 @@ def union_box_arches(block, spec, b):
 
 def build_wheel_well_shells(spec, b):
     """A 3cm-inset cylinder shell (open both ends) behind each arch cut so
-    the wheel well reads as having real depth instead of a knife-edge hole."""
+    the wheel well reads as having real depth instead of a knife-edge hole.
+    Its angular sweep is clamped so it never rises above the body's own
+    local height at that station - a low/open-wheel car's fender doesn't
+    reach as high as a fixed 150 deg sweep would assume, and an unclamped
+    shell then floats above the (absent) bodywork there."""
+    cv = get_curves(spec, b)
     lat = wheel_lateral_offset(spec)
     r = spec["wheel_radius"] + 0.05 - 0.03
     width = spec["tyre_width"] + 0.14 - 0.05
@@ -267,11 +272,19 @@ def build_wheel_well_shells(spec, b):
     for hub_x, x_axle in ((lat, b["x_front_axle"]), (-lat, b["x_front_axle"]),
                            (lat, b["x_rear_axle"]), (-lat, b["x_rear_axle"])):
         hub_y = blender_y(x_axle, b)
+        local_top = cv["zt"](x_axle) - 0.02
+        headroom = local_top - spec["wheel_radius"]
+        if headroom >= r:
+            max_deg = 150.0
+        elif headroom <= 0:
+            max_deg = 20.0
+        else:
+            max_deg = min(150.0, math.degrees(math.acos(max(-1.0, min(1.0, headroom / r)))))
         bm = bmesh.new()
         segs = 28
         ring_a, ring_b = [], []
         for i in range(segs):
-            a = math.radians(-150 + 300 * i / (segs - 1))
+            a = math.radians(-max_deg + 2 * max_deg * i / (segs - 1))
             y = hub_y + r * math.sin(a)
             z = spec["wheel_radius"] + r * math.cos(a)
             ring_a.append(bm.verts.new((hub_x - width / 2, y, z)))

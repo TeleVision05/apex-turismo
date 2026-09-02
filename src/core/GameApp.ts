@@ -433,6 +433,7 @@ export class GameApp implements GameFacade {
 
   quitToHome(): void {
     this.disposeRace();
+    this.renderer.setLighting('noon', 'clear');
     this.showScreen('home');
   }
   restartRace(): void {

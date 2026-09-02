@@ -53,9 +53,9 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
     hemiGround: '#5a5a40',
     fogColor: '#d9e2ee',
     fogDensity: 0.0006,
-    turbidity: 6,
-    rayleigh: 2.8,
-    exposure: 0.5,
+    turbidity: 4,
+    rayleigh: 1.8,
+    exposure: 0.55,
   },
   noon: {
     elevationDeg: 58,
@@ -81,8 +81,8 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
     hemiGround: '#3a3a30',
     fogColor: '#e8c7a8',
     fogDensity: 0.0011,
-    turbidity: 10,
-    rayleigh: 3.5,
+    turbidity: 8,
+    rayleigh: 2.4,
     exposure: 0.55,
   },
   night: {
@@ -159,7 +159,7 @@ export class SceneRenderer {
         )
         .replace(
           'gl_FragColor = vec4( texColor, 1.0 );',
-          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 1.8 ) ), 1.0 );',
+          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 2.6 ) ), 1.0 );',
         );
     };
     this.scene.add(this.sky);
@@ -230,6 +230,7 @@ export class SceneRenderer {
     u.rayleigh.value = overcast ? 0.8 : p.rayleigh;
     u.mieCoefficient.value = overcast ? 0.02 : 0.005;
     u.mieDirectionalG.value = 0.92;
+    this.skyScale.value = time === 'night' ? 0.12 : time === 'noon' ? 0.32 : 0.62;
     this.sun.color.set(p.sunColor);
     this.sun.intensity = p.sunIntensity * (overcast ? 0.35 : 1);
     this.sun.visible = p.elevationDeg > -3 || true;
@@ -240,8 +241,18 @@ export class SceneRenderer {
     const fogColor = new Color(p.fogColor);
     if (overcast) fogColor.multiplyScalar(0.8);
     const density = p.fogDensity * (weather === 'rain' ? 2.4 : overcast ? 1.6 : 1);
-    this.scene.fog = new Fog(fogColor, 120, Math.min(7000, 1.8 / density));
-    this.scene.background = null;
+    this.scene.fog = new Fog(fogColor, overcast ? 60 : 120, Math.min(7000, 1.8 / density));
+    // overcast: a flat grey dome instead of the physical sky
+    this.sky.visible = !overcast;
+    this.scene.background = overcast
+      ? new Color(time === 'night' ? '#05060a' : weather === 'rain' ? '#7d8791' : '#a7b0b8')
+      : null;
+    if (overcast && time !== 'night')
+      this.scene.fog = new Fog(
+        weather === 'rain' ? '#7d8791' : '#a7b0b8',
+        40,
+        weather === 'rain' ? 900 : 1600,
+      );
     this.renderer.toneMappingExposure = p.exposure * (overcast ? 0.9 : 1);
     this.buildEnvironment();
   }

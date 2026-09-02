@@ -10,7 +10,7 @@ import type {
 import { Track } from '../track/Track';
 import { RaceSession, type RaceEntry } from './RaceSession';
 import { CarVisual, loadCarModel } from '../render/CarVisual';
-import { SkidMarks, SmokeParticles } from '../render/Effects';
+import { SkidMarks, SmokeParticles, RainParticles } from '../render/Effects';
 import { CameraRig } from '../render/CameraRig';
 import type { SceneRenderer } from '../render/SceneRenderer';
 import { buildTrackScene, type TrackScene } from '../render/track/TrackScene';
@@ -74,6 +74,8 @@ export class RaceRuntime {
   readonly visuals: CarVisual[] = [];
   readonly skids = new SkidMarks();
   readonly smoke = new SmokeParticles();
+  private rain: RainParticles | null = null;
+  private readonly wind = new Vector3(2, 0, 1);
   readonly camera: CameraRig;
   readonly hud = emptyHud();
   private readonly audioStates: CarAudioState[] = [];
@@ -103,8 +105,19 @@ export class RaceRuntime {
     this.session = new RaceSession(track, config, entries, assists, transmission);
     this.camera = new CameraRig(renderer.camera);
     this.recorder = new ReplayRecorder(entries.length);
-    for (const m of trackScene.roadMeshes) m.receiveShadow = true;
+    for (const m of trackScene.roadMeshes) {
+      m.receiveShadow = true;
+      if (config.weather === 'rain') {
+        const mat = m.material as { roughness?: number; envMapIntensity?: number };
+        if (mat.roughness !== undefined) mat.roughness = 0.32;
+        if (mat.envMapIntensity !== undefined) mat.envMapIntensity = 1.4;
+      }
+    }
     this.group.add(trackScene.group, this.skids.mesh, this.smoke.points);
+    if (config.weather === 'rain') {
+      this.rain = new RainParticles();
+      this.group.add(this.rain.points);
+    }
   }
 
   static async load(
@@ -200,6 +213,7 @@ export class RaceRuntime {
     this.camera.update(player, dt);
     this.renderer.updateShadowTarget(player.pos);
     this.trackScene.update(dt, this.renderer.camera.position);
+    this.rain?.update(dt, this.renderer.camera.position, this.wind);
     this.updateStartLights();
     this.feedAudio(dt);
     this.rumble(inputManager, dt);
