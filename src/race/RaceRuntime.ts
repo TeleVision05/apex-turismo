@@ -9,6 +9,7 @@ import type {
 } from '../core/types';
 import { Track } from '../track/Track';
 import { RaceSession, type RaceEntry } from './RaceSession';
+import { RacingLine } from '../track/RacingLine';
 import { CarVisual, loadCarModel } from '../render/CarVisual';
 import { SkidMarks, SmokeParticles, RainParticles } from '../render/Effects';
 import { CameraRig } from '../render/CameraRig';
@@ -101,8 +102,9 @@ export class RaceRuntime {
     transmission: Transmission,
     private readonly renderer: SceneRenderer,
     private readonly audio: AudioEngine,
+    line: RacingLine,
   ) {
-    this.session = new RaceSession(track, config, entries, assists, transmission);
+    this.session = new RaceSession(track, config, entries, assists, transmission, line);
     this.camera = new CameraRig(renderer.camera);
     this.recorder = new ReplayRecorder(entries.length);
     for (const m of trackScene.roadMeshes) {
@@ -131,14 +133,17 @@ export class RaceRuntime {
     quality: 'low' | 'medium' | 'high' | 'ultra',
     progress: (p: number, text: string) => void,
   ): Promise<RaceRuntime> {
-    progress(0.1, 'Building circuit');
+    progress(0.1, 'Preparing racing line');
+    await nextFrame();
+    const line = new RacingLine(track);
+    progress(0.2, 'Building circuit');
     await nextFrame();
     const trackScene = buildTrackScene(track, {
       quality,
       timeOfDay: config.timeOfDay,
-      racingLine: null,
+      racingLine: line,
     });
-    progress(0.45, 'Preparing racing line');
+    progress(0.45, 'Placing the grid');
     await nextFrame();
     const rt = new RaceRuntime(
       track,
@@ -149,6 +154,7 @@ export class RaceRuntime {
       transmission,
       renderer,
       audio,
+      line,
     );
     const uniqueSpecs = [...new Map(entries.map((e) => [e.spec.id, e.spec])).values()];
     let done = 0;
