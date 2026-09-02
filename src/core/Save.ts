@@ -23,6 +23,7 @@ export function defaultSettings(): GameSettings {
     steeringSensitivity: 1,
     wheelRotationDeg: 900,
     wheelForceFeedback: 0.7,
+    unlimitedCredits: false,
   };
 }
 

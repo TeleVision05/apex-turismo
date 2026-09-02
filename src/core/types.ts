@@ -180,6 +180,8 @@ export interface GameSettings {
   steeringSensitivity: number; // 0.5..2 for gamepad/keyboard
   wheelRotationDeg: number; // physical wheel lock-to-lock, e.g. 900
   wheelForceFeedback: number; // 0..1 (vibration strength where available)
+  /** cheat: credits never run out */
+  unlimitedCredits: boolean;
 }
 
 export type CameraMode = 'chase' | 'chaseFar' | 'hood' | 'cockpit' | 'bumper';

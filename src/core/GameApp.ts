@@ -17,7 +17,7 @@ import { createAudioEngine } from '../audio';
 import type { AudioEngine } from '../audio/AudioContract';
 import { SaveStore } from './Save';
 import { InputManager } from './Input';
-import { Economy, upgradeCatalogue } from './Economy';
+import { Economy, upgradeCatalogue, UNLIMITED } from './Economy';
 import { CARS, carById } from '../data/cars';
 import { EVENTS, eventById, type RaceEvent } from '../data/events';
 import { performancePoints, peakPowerKw } from '../physics/Tuning';
@@ -241,6 +241,7 @@ export class GameApp implements GameFacade {
       this.audio.setSettings(s.audio);
     }
     if (patch.assists) s.assists = { ...s.assists, ...patch.assists };
+    if (s.unlimitedCredits) this.save.credits = UNLIMITED;
     if (this.race) {
       this.race.session.player.vehicle.assists = s.assists;
       this.race.session.player.vehicle.transmission = s.transmission;

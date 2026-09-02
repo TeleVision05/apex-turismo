@@ -145,6 +145,11 @@ class SettingsScreen implements Screen {
       ),
     );
     this.push(
+      makeToggle('Unlimited credits (cheat)', s.unlimitedCredits, (v) =>
+        this.ctx.facade.updateSettings({ unlimitedCredits: v }),
+      ),
+    );
+    this.push(
       makeCycle('Camera', CAMERA_OPTIONS, this.ctx.facade.cameraMode(), (v) =>
         this.ctx.facade.setCameraMode(v),
       ),

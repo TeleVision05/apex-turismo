@@ -41,6 +41,7 @@ export function upgradeCatalogue(spec: CarSpec): UpgradeInfo[] {
   ];
 }
 
+export const UNLIMITED = 999_999_999;
 const fmt = (n: number): string => `Cr. ${Math.round(n).toLocaleString('en-US')}`;
 
 /** Garage, dealership and tuning-shop transactions on the save data. */
@@ -49,6 +50,7 @@ export class Economy {
 
   buyCar(specId: string, color: string): string | null {
     const spec = carById(specId);
+    if (this.save.settings.unlimitedCredits) this.save.credits = UNLIMITED;
     if (this.save.credits < spec.priceCr) {
       return `You need ${fmt(spec.priceCr - this.save.credits)} more to buy the ${spec.name}. Win races to earn credits.`;
     }
@@ -91,6 +93,7 @@ export class Economy {
       this.applyStage(car, kind, stage);
       return null;
     }
+    if (this.save.settings.unlimitedCredits) this.save.credits = UNLIMITED;
     if (this.save.credits < target.priceCr) {
       return `You need ${fmt(target.priceCr - this.save.credits)} more for ${target.label}.`;
     }
