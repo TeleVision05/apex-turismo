@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audio Preview</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #0b0e14;
+        color: #e6e9ef;
+        padding: 20px;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: 600;
+      }
+      section {
+        border: 1px solid #2a2f3a;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 14px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #9aa4b2;
+        margin: 0 0 10px;
+      }
+      button {
+        background: #1c2230;
+        color: #e6e9ef;
+        border: 1px solid #333c4d;
+        border-radius: 6px;
+        padding: 6px 12px;
+        margin: 3px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button.active {
+        background: #3a6ff0;
+        border-color: #3a6ff0;
+      }
+      button:hover {
+        border-color: #5a6478;
+      }
+      label {
+        display: inline-block;
+        margin-right: 12px;
+        font-size: 13px;
+      }
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        background: #05070c;
+        border-radius: 6px;
+        padding: 10px;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      select,
+      input[type='range'] {
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Apex Turismo — Audio Preview</h1>
+
+    <section>
+      <h2>Transport</h2>
+      <button id="start">Start (resume)</button>
+      <label>Preset
+        <select id="preset">
+          <option value="i4">i4</option>
+          <option value="i6">i6</option>
+          <option value="v6">v6</option>
+          <option value="v8">v8</option>
+          <option value="rotary">rotary</option>
+          <option value="flat6">flat6</option>
+          <option value="v8hybrid">v8hybrid</option>
+        </select>
+      </label>
+      <label>Throttle
+        <input id="throttle" type="range" min="0" max="100" value="60" />
+        <span id="throttleVal">60</span>%
+      </label>
+      <button id="sweep">Sweep RPM</button>
+      <button id="drive">Drive Simulation</button>
+      <button id="collision">Play Collision</button>
+      <button id="scrape">Hold Wall Scrape</button>
+    </section>
+
+    <section>
+      <h2>UI Sounds</h2>
+      <button data-ui="move">move</button>
+      <button data-ui="confirm">confirm</button>
+      <button data-ui="back">back</button>
+      <button data-ui="buy">buy</button>
+      <button data-ui="error">error</button>
+      <button data-ui="countdown">countdown</button>
+      <button data-ui="go">go</button>
+    </section>
+
+    <section>
+      <h2>Loops</h2>
+      <button id="music">Toggle Menu Music</button>
+      <button id="ambience">Toggle Race Ambience</button>
+      <button id="raceActive">Toggle Race Active</button>
+    </section>
+
+    <section>
+      <h2>Debug</h2>
+      <button id="sample">Sample Analyser</button>
+      <div id="log"></div>
+    </section>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

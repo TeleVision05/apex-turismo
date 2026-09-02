@@ -1,0 +1,6 @@
+node_modules
+dist
+tools/tracks/.venv
+tools/tracks/cache
+tools/**/__pycache__
+.DS_Store

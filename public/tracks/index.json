@@ -1,0 +1,29 @@
+[
+  {
+    "id": "spa",
+    "name": "Circuit de Spa-Francorchamps",
+    "country": "Belgium",
+    "lengthM": 6970.4,
+    "direction": "clockwise",
+    "corners": 16,
+    "elevationRangeM": 97.1
+  },
+  {
+    "id": "nurburgring_gp",
+    "name": "Nurburgring GP-Strecke",
+    "country": "Germany",
+    "lengthM": 4587.7,
+    "direction": "clockwise",
+    "corners": 25,
+    "elevationRangeM": 54.8
+  },
+  {
+    "id": "fuji",
+    "name": "Fuji Speedway",
+    "country": "Japan",
+    "lengthM": 4564.8,
+    "direction": "clockwise",
+    "corners": 1,
+    "elevationRangeM": 53.5
+  }
+]

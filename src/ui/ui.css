@@ -1,0 +1,1207 @@
+/* Apex Turismo UI — GT7-inspired dark, translucent, restrained. */
+
+.apex-ui {
+  position: absolute;
+  inset: 0;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-feature-settings: 'tnum' 1;
+  color: #f5f5f5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.apex-ui * {
+  box-sizing: border-box;
+}
+
+:root {
+  --gold: #e8b923;
+  --blue: #7fb3ff;
+  --panel-bg: rgba(9, 11, 15, 0.72);
+  --panel-bg-strong: rgba(6, 7, 10, 0.86);
+  --panel-border: rgba(255, 255, 255, 0.14);
+  --text-dim: rgba(245, 245, 245, 0.62);
+  --text-dimmer: rgba(245, 245, 245, 0.38);
+  --green: #6fe08a;
+  --red: #ef6a6a;
+  --radius: 10px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Screens & transitions ---------- */
+
+.screens {
+  position: absolute;
+  inset: 0;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+  visibility: hidden;
+}
+
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+/* The race screen has no menu content of its own — the HUD layer handles it,
+   and the canvas underneath must keep receiving input. */
+.screen-race.active {
+  pointer-events: none;
+}
+
+.screen-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---------- Shared panel chrome ---------- */
+
+.panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+}
+
+.section-label {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.side-panel {
+  position: absolute;
+  top: clamp(16px, 3vh, 32px);
+  left: clamp(16px, 3vw, 40px);
+  bottom: clamp(16px, 3vh, 32px);
+  width: min(44vw, 560px);
+  display: flex;
+  flex-direction: column;
+  padding: clamp(16px, 2.4vh, 28px);
+  gap: 14px;
+}
+
+.side-panel-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ---------- Header bar (home) ---------- */
+
+.top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(14px, 2.4vh, 24px) clamp(20px, 3vw, 40px);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+}
+
+.top-bar .credits {
+  color: var(--gold);
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 700;
+}
+
+.top-bar .driver-block {
+  text-align: right;
+}
+
+.top-bar .driver-name {
+  font-weight: 600;
+}
+
+.top-bar .car-block {
+  text-align: center;
+}
+
+.top-bar .car-name {
+  font-weight: 600;
+}
+
+.top-bar .car-pp {
+  color: var(--blue);
+  font-size: 13px;
+}
+
+/* ---------- Buttons & rows ---------- */
+
+.gt-btn {
+  font-family: inherit;
+  font-size: 14px;
+  color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition:
+    background 150ms,
+    border-color 150ms;
+}
+
+.gt-btn:hover,
+.gt-btn.focused {
+  background: rgba(232, 185, 35, 0.16);
+  border-color: var(--gold);
+}
+
+.gt-btn.primary {
+  background: var(--gold);
+  color: #1a1305;
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+.gt-btn.primary:hover,
+.gt-btn.primary.focused {
+  background: #f5c93a;
+}
+
+.gt-btn.danger {
+  border-color: rgba(239, 106, 106, 0.5);
+}
+
+.gt-btn.danger:hover,
+.gt-btn.danger.focused {
+  background: rgba(239, 106, 106, 0.2);
+  border-color: var(--red);
+}
+
+.gt-btn.disabled,
+.gt-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.gt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.gt-row.focused,
+.gt-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--panel-border);
+}
+
+.gt-row.disabled {
+  opacity: 0.4;
+}
+
+.gt-row.disabled .gt-row-hint {
+  color: var(--text-dim);
+}
+
+.gt-row-label {
+  font-size: 14px;
+  color: var(--text-dim);
+  flex: 1 1 auto;
+}
+
+.gt-row-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.gt-row-hint {
+  font-size: 11px;
+  color: var(--blue);
+  margin-top: 2px;
+}
+
+/* Nested inside a .gt-row (a row-direction flex box) this wraps onto its own
+   full-width line below the label/value pair. As a standalone child of a
+   column flex container (.form-rows) it must NOT inherit flex-basis: 100%,
+   which would ask for 100% of the column's height instead of its width. */
+.gt-row > .gt-row-hint {
+  flex-basis: 100%;
+}
+
+.gt-arrow {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.gt-arrow:hover {
+  color: var(--gold);
+}
+
+.gt-cycle-text {
+  min-width: 5.5em;
+  text-align: center;
+  color: #fff;
+  font-weight: 600;
+}
+
+.gt-slider-track {
+  display: flex;
+  align-items: center;
+  width: clamp(90px, 12vw, 160px);
+}
+
+.gt-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  outline: none;
+}
+
+.gt-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  border: 2px solid #1a1305;
+}
+
+.gt-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  border: 2px solid #1a1305;
+}
+
+.gt-slider-readout {
+  min-width: 3.5em;
+  text-align: right;
+  color: #fff;
+  font-weight: 600;
+}
+
+.gt-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+}
+
+.gt-swatch.selected,
+.gt-swatch.focused {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(232, 185, 35, 0.4);
+}
+
+.swatch-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+}
+
+/* ---------- Cards (garage/dealership/events/records) ---------- */
+
+.gt-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.gt-card.focused,
+.gt-card:hover {
+  background: rgba(232, 185, 35, 0.1);
+  border-color: var(--gold);
+}
+
+.gt-card.selected {
+  border-color: var(--blue);
+}
+
+.gt-card .card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.gt-card .card-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.gt-card .card-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.gt-card .card-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.gt-card .pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.pill.pp {
+  background: rgba(127, 179, 255, 0.16);
+  color: var(--blue);
+}
+
+.pill.owned {
+  background: rgba(111, 224, 138, 0.16);
+  color: var(--green);
+}
+
+.pill.locked {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+
+.pill.class {
+  background: rgba(232, 185, 35, 0.14);
+  color: var(--gold);
+}
+
+.stat-card {
+  padding: 14px 16px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 18px;
+  margin-top: 8px;
+}
+
+.stat-item .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.stat-item .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+.notice.error {
+  background: rgba(239, 106, 106, 0.14);
+  color: #ffb3b3;
+  border: 1px solid rgba(239, 106, 106, 0.4);
+}
+
+.notice.info {
+  background: rgba(127, 179, 255, 0.12);
+  color: var(--blue);
+  border: 1px solid rgba(127, 179, 255, 0.3);
+}
+
+/* ---------- Home tile grid ---------- */
+
+.home-tiles {
+  position: absolute;
+  left: clamp(20px, 3vw, 40px);
+  right: clamp(20px, 3vw, 40px);
+  top: clamp(90px, 14vh, 130px);
+  bottom: clamp(20px, 3vh, 40px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-auto-rows: minmax(90px, 1fr);
+  gap: clamp(10px, 1.4vw, 18px);
+  max-width: 720px;
+}
+
+.gt-tile {
+  font-family: inherit;
+  text-align: left;
+  background: var(--panel-bg);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  color: #fff;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    transform 150ms;
+}
+
+.gt-tile:hover,
+.gt-tile.focused {
+  border-color: var(--gold);
+  background: rgba(232, 185, 35, 0.12);
+  transform: translateY(-2px);
+}
+
+.gt-tile-title {
+  font-weight: 700;
+  font-size: clamp(14px, 1.3vw, 17px);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.gt-tile-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ---------- Title screen ---------- */
+
+.screen-title .title-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  background: radial-gradient(ellipse at center, rgba(20, 20, 26, 0.2), rgba(4, 4, 6, 0.75));
+}
+
+.title-wrap .game-title {
+  font-size: clamp(40px, 7vw, 84px);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 0 40px rgba(232, 185, 35, 0.35);
+}
+
+.title-wrap .game-subtitle {
+  color: var(--gold);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: clamp(11px, 1.2vw, 14px);
+}
+
+.title-wrap .press-start {
+  margin-top: 40px;
+  font-size: 14px;
+  color: var(--text-dim);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.title-wrap .driver-credit {
+  position: absolute;
+  bottom: 20px;
+  font-size: 11px;
+  color: var(--text-dimmer);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Form grids (custom race / timetrial / settings) ---------- */
+
+.form-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.subsection {
+  margin-top: 16px;
+}
+
+.subsection:first-child {
+  margin-top: 0;
+}
+
+/* ---------- Confirm steps (sell / reset) ---------- */
+
+.confirm-box {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 106, 106, 0.4);
+  background: rgba(239, 106, 106, 0.08);
+  margin-top: 10px;
+}
+
+.confirm-box .confirm-text {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+/* ---------- Controls screen ---------- */
+
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.device-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+}
+
+.kbd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.kbd-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+
+.kbd-table td.key {
+  color: #fff;
+  font-weight: 600;
+  width: 40%;
+}
+
+.capture-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  text-align: center;
+}
+
+.capture-overlay .capture-text {
+  font-size: 20px;
+  color: var(--gold);
+}
+
+.capture-overlay .capture-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
+
+/* ---------- Records ---------- */
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.records-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.records-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.records-table tr.focused td {
+  background: rgba(232, 185, 35, 0.1);
+}
+
+/* ---------- Loading screen ---------- */
+
+.screen-loading .loading-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(4, 4, 6, 0.65);
+}
+
+.loading-track-name {
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.loading-bar-track {
+  width: min(50vw, 480px);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  background: var(--gold);
+  width: 0%;
+  transition: width 150ms linear;
+}
+
+.loading-status {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.loading-tip {
+  font-size: 12px;
+  color: var(--blue);
+  max-width: 60vw;
+  text-align: center;
+}
+
+/* ---------- Pause & Results ---------- */
+
+.screen-pause .center-panel,
+.screen-results .center-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(90vw, 440px);
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.screen-results .center-panel {
+  width: min(94vw, 760px);
+}
+
+.pause-title,
+.results-title {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 14px;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.results-table-wrap {
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.results-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 8px;
+}
+
+.results-table td {
+  padding: 6px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.results-table tr.player-row td {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.results-credits {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.results-credits .credits-earned {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-new-record {
+  text-align: center;
+  color: var(--blue);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+/* ---------- Toast ---------- */
+
+.toast-layer {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateX(14px);
+  transition:
+    opacity 200ms,
+    transform 200ms;
+}
+
+.toast.shown {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ================= HUD ================= */
+
+.hud-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 200ms;
+}
+
+.hud-layer.hidden-hud {
+  display: none;
+}
+
+.hud-layer.dimmed {
+  opacity: 0.35;
+}
+
+.hud-top-left {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-position {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-position .of {
+  font-size: 15px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.hud-lap {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.hud-top-center {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hud-current-time {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-time-row {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-delta {
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-delta.negative {
+  background: rgba(111, 224, 138, 0.18);
+  color: var(--green);
+}
+
+.hud-delta.positive {
+  background: rgba(239, 106, 106, 0.18);
+  color: var(--red);
+}
+
+.hud-sectors {
+  display: flex;
+  gap: 4px;
+}
+
+.hud-sector {
+  width: 26px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.hud-sector.set {
+  background: var(--green);
+}
+
+.hud-sector.slow {
+  background: #f0c94a;
+}
+
+.hud-gaps {
+  position: absolute;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-bottom-right {
+  position: absolute;
+  bottom: 18px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.hud-speed {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-speed .unit {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+
+.hud-gear {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.hud-rpm-bar {
+  width: 220px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-top: 4px;
+  position: relative;
+}
+
+.hud-rpm-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: linear-gradient(to right, var(--blue), var(--gold));
+  transform: scaleX(0);
+}
+
+.hud-rpm-redline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(239, 106, 106, 0.35);
+}
+
+.hud-shift-light {
+  width: 220px;
+  height: 4px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.hud-shift-light.flash {
+  background: var(--red);
+}
+
+.hud-assists {
+  position: absolute;
+  bottom: 18px;
+  left: 250px;
+  display: flex;
+  gap: 8px;
+}
+
+.hud-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dimmer);
+}
+
+.hud-badge.active {
+  background: rgba(127, 179, 255, 0.2);
+  color: var(--blue);
+}
+
+.hud-badge.warn {
+  background: rgba(239, 106, 106, 0.22);
+  color: #ffb3b3;
+}
+
+.hud-center-message {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.6);
+}
+
+.hud-center-message.countdown {
+  font-size: 96px;
+}
+
+.hud-center-message.flash {
+  animation: hudflash 0.6s steps(1) infinite;
+  color: var(--red);
+}
+
+@keyframes hudflash {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.hud-message-text {
+  font-size: 32px;
+}
+
+.hud-minimap {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  width: 220px;
+  height: 220px;
+}
+
+.hud-minimap canvas {
+  position: absolute;
+  inset: 0;
+  width: 220px;
+  height: 220px;
+}
+
+.hud-standings {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 480px);
+  padding: 14px 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.hud-standings table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hud-standings th {
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 4px 6px;
+}
+
+.hud-standings td {
+  padding: 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hud-standings tr.is-player td {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* ---------- Replay ---------- */
+
+.screen-replay .replay-bar {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 3vh, 28px);
+  transform: translateX(-50%);
+  width: min(92vw, 820px);
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.replay-progress-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.replay-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.replay-time-row {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.replay-speed {
+  min-width: 2.4em;
+  text-align: center;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-subject {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+@media (max-width: 900px) {
+  .home-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
