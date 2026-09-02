@@ -242,7 +242,7 @@ export class RainParticles {
       transparent: true,
       depthWrite: false,
       uniforms: { map: { value: makeSoftCircle() } },
-      vertexShader: `void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = 90.0 / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      vertexShader: `void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = min(90.0 / -mv.z, 14.0); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `uniform sampler2D map; void main(){ vec2 uv = gl_PointCoord; uv.y = (uv.y - 0.5) * 0.25 + 0.5; float a = texture2D(map, uv).a; gl_FragColor = vec4(0.75, 0.8, 0.9, a * 0.5); }`,
     });
     this.points = new Points(geo, mat);

@@ -46,7 +46,7 @@ TRACKS = [
     ("monza", "Autodromo Nazionale Monza", "Italy", 5793, "clockwise", 12, 45.6156, 9.2811, 3000),
     ("spa", "Circuit de Spa-Francorchamps", "Belgium", 7004, "clockwise", 12, 50.4372, 5.9714, 4000),
     ("laguna_seca", "WeatherTech Raceway Laguna Seca", "USA", 3602, "anticlockwise", 12, 36.5841, -121.7524, 2500),
-    ("nurburgring_gp", "Nurburgring GP-Strecke", "Germany", 5148, "clockwise", 12, 50.3356, 6.9475, 3000),
+    # nurburgring_gp intentionally omitted -- see OVERRIDES comment below for why.
     ("brands_hatch", "Brands Hatch GP", "UK", 3908, "clockwise", 11, 51.3569, 0.2631, 2500),
     ("tsukuba", "Tsukuba Circuit", "Japan", 2045, "clockwise", 10, 36.1517, 139.9202, 1500),
     ("bathurst", "Mount Panorama Circuit", "Australia", 6213, "anticlockwise", 11, -33.4470, 149.5544, 4000),
@@ -68,19 +68,21 @@ OVERRIDES = {
     # would otherwise drop it as a paddock-access road, breaking loop
     # connectivity (way id from cache/brands_hatch.json).
     "brands_hatch": {"keep_way_ids": {25804653}},
-    # A 3000 m radius pulls in the Nordschleife, Sprintstrecke, a rallycross
-    # circuit and the Mullenbachschleife, all sharing junction nodes with the
-    # GP-Strecke; the walker kept shortcutting onto them (confirmed
-    # 2026-09-01: a ~4587 m loop through "Nurburgring Sprintstrecke" +
-    # "Rallycross circuit" ways, a visibly wrong out-and-back spur in the
-    # preview). Shrinking the search radius to 1500 m mostly excludes the
-    # Nordschleife/Sprintstrecke loops geographically, and excluding the
-    # remaining overlap by name isolates the compact 5148 m GP loop through
-    # the Mercedes Arena / Ford-Kurve hairpins.
-    "nurburgring_gp": {
-        "radius_m": 1500,
-        "extra_drop_regex": r"nordschleife|rallycross|sprint|m[uü]llenbach|kart|test",
-    },
+    # nurburgring_gp: DROPPED, not overridden. Investigated at length on
+    # 2026-09-01/02: the Nurburgring GP-Strecke's OSM ways are topologically
+    # entangled with the adjacent Sprintstrecke and Mullenbachschleife --
+    # they share physical tarmac that OSM tags only under the other
+    # circuit's name at the junction. Tried: 3000m radius (unmodified) ->
+    # 4587 m loop through "Nurburgring Sprintstrecke" + "Rallycross circuit"
+    # ways, a visibly wrong out-and-back spur in the preview. 1500 m radius
+    # with sprint/rallycross/nordschleife/muellenbach excluded by name ->
+    # no closed loop (real GP-Strecke segments are outside 1500 m). 3000 m
+    # radius excluding all sprint-named ways -> no closed loop (some GP-only
+    # segments dead-end without the shared Sprintstrecke-tagged tarmac).
+    # 3000 m excluding only rallycross/nordschleife -> same wrong 4587 m
+    # loop as the unmodified run. No name/radius combination tried isolated
+    # a clean 5148 m loop, so this track is skipped per the spec's own
+    # allowance to skip tracks that don't stitch within reasonable effort.
 }
 
 

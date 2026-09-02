@@ -267,11 +267,15 @@ def build_wing(spec, curves, bounds, materials):
     return body_parts, trim
 
 
-def build_exhaust(spec, bounds, materials):
+def build_exhaust(spec, curves, bounds, materials):
     count = max(1, spec.get("exhaust_count", 1))
     hw = spec["width"] / 2 * 0.55
-    z = 0.28
-    y = bounds["y_rear_bump"] - 0.03
+    # 0.28 m is the nominal height, but never higher than the local rear
+    # -bumper surface actually reaches (a low car's tail tapers well under
+    # that near the very tip).
+    tail_x = curves["L"] - 0.04
+    z = min(0.28, curves["zt"](tail_x) * 0.55)
+    y = bounds["y_rear_bump"] + 0.04
     objs = []
     for i in range(count):
         x = 0.0 if count == 1 else (i - (count - 1) / 2) * (hw * 1.4 / max(1, count - 1))

@@ -244,10 +244,12 @@ def union_box_arches(block, spec, b):
         return block
     lat = wheel_lateral_offset(spec)
     r = spec["wheel_radius"]
+    z_bottom, z_top = 0.02, r * 2.0 + 0.10  # stay clear of the ground plane
     for x_axle in (b["x_front_axle"], b["x_rear_axle"]):
         hub_y = blender_y(x_axle, b)
         bulge_half_w = lat + spec["tyre_width"] / 2.0 + 0.06
-        bulge = _rounded_box(0.0, hub_y, r * 0.85, bulge_half_w, 0.34, r * 1.05)
+        bulge = _rounded_box(0.0, hub_y, (z_bottom + z_top) / 2, bulge_half_w, 0.34,
+                              (z_top - z_bottom) / 2)
         bevel = bulge.modifiers.new("Bevel", 'BEVEL')
         bevel.width = 0.05
         bevel.segments = 3

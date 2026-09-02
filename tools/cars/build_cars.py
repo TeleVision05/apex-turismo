@@ -63,7 +63,7 @@ def _build_detail_groups(spec, curves, bounds, mats, well_shells, wing_trim):
                   + wing_trim + well_shells)
     trim_obj = _finalize_group(export_mod.join_group(trim_parts, "Trim"), mats["Trim"])
 
-    chrome_parts = details.build_exhaust(spec, bounds, mats) + details.build_badge(spec, curves, bounds, mats)
+    chrome_parts = details.build_exhaust(spec, curves, bounds, mats) + details.build_badge(spec, curves, bounds, mats)
     chrome_obj = _finalize_group(export_mod.join_group(chrome_parts, "Chrome"), mats["Chrome"])
 
     headlight_obj = _finalize_group(

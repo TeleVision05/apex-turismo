@@ -47,7 +47,7 @@ export class CameraRig {
         this.updateAttached(v, origin, 0, v.spec.heightM * 0.72, -v.spec.lengthM * 0.28, dt);
         break;
       case 'cockpit':
-        this.updateAttached(v, origin, -0.36, v.spec.heightM * 0.78, -v.spec.lengthM * 0.02, dt);
+        this.updateAttached(v, origin, -0.36, v.spec.heightM * 0.7, v.spec.lengthM * 0.02, dt);
         break;
       case 'bumper':
         this.updateAttached(v, origin, 0, 0.45, -v.spec.lengthM * 0.5 + 0.1, dt);

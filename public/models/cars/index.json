@@ -14,7 +14,8 @@
     "H": 1.34,
     "greenhouseYFront": 0.24,
     "greenhouseYRear": -1.432,
-    "hasWing": false
+    "hasWing": false,
+    "wheelLateralOffset": 0.7025
   },
   {
     "id": "hakone_type_r",
@@ -31,7 +32,8 @@
     "H": 1.41,
     "greenhouseYFront": 0.4734,
     "greenhouseYRear": -1.8978,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.7975
   },
   {
     "id": "kaizen_rx7",
@@ -48,7 +50,8 @@
     "H": 1.23,
     "greenhouseYFront": 0.2916,
     "greenhouseYRear": -1.934,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.7475
   },
   {
     "id": "shinsei_gtr",
@@ -65,7 +68,8 @@
     "H": 1.37,
     "greenhouseYFront": 0.2572,
     "greenhouseYRear": -2.1816,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.8025
   },
   {
     "id": "bavaria_m4",
@@ -82,7 +86,8 @@
     "H": 1.39,
     "greenhouseYFront": 0.2474,
     "greenhouseYRear": -1.6686,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.8025
   },
   {
     "id": "stallion_gt",
@@ -99,7 +104,8 @@
     "H": 1.38,
     "greenhouseYFront": 0.4092,
     "greenhouseYRear": -2.0816,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.8125
   },
   {
     "id": "vantage_sf",
@@ -116,7 +122,8 @@
     "H": 1.19,
     "greenhouseYFront": -0.206,
     "greenhouseYRear": -2.0,
-    "hasWing": false
+    "hasWing": false,
+    "wheelLateralOffset": 0.8375
   },
   {
     "id": "aurelia_gt3",
@@ -129,11 +136,12 @@
     "trackRear": 1.71,
     "wheelRadius": 0.35,
     "tyreWidth": 0.3,
-    "triangles": 42328,
+    "triangles": 41316,
     "H": 1.28,
     "greenhouseYFront": 0.03,
     "greenhouseYRear": -1.6332,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.855
   },
   {
     "id": "lyon_lmp",
@@ -150,6 +158,7 @@
     "H": 1.05,
     "greenhouseYFront": -0.084,
     "greenhouseYRear": -1.944,
-    "hasWing": true
+    "hasWing": true,
+    "wheelLateralOffset": 0.78
   }
 ]
