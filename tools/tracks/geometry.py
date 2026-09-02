@@ -35,6 +35,34 @@ def signed_area_xn(xs, ns):
     return 0.5 * float(np.sum(xs * n2 - x2 * ns))
 
 
+def _densify(xs, ns, max_gap=15.0):
+    """Insert linearly-interpolated points into any raw gap longer than
+    max_gap. OSM ways sometimes digitize long straights with just two
+    sparse endpoint nodes; feeding that straight into splprep next to a
+    tight corner starves the spline of local support and it overshoots,
+    producing a tiny self-intersecting loop right at the corner apex
+    (observed on Silverstone's Chapel-Curve/Hangar-Straight junction: a
+    146 m raw chord next to a real corner produced a ~150-177 deg heading
+    "kink" that persisted even with zero smoothing, i.e. it was a resampling
+    artifact, not real track geometry). Denser input keeps the spline
+    faithful to the corner instead of overshooting."""
+    out_x, out_n = [xs[0]], [ns[0]]
+    for i in range(1, len(xs) + 1):
+        x0, n0 = xs[i - 1], ns[i - 1]
+        x1, n1 = xs[i % len(xs)], ns[i % len(xs)]
+        gap = math.hypot(x1 - x0, n1 - n0)
+        if gap > max_gap:
+            steps = int(math.ceil(gap / max_gap))
+            for k in range(1, steps):
+                t = k / steps
+                out_x.append(x0 + (x1 - x0) * t)
+                out_n.append(n0 + (n1 - n0) * t)
+        if i < len(xs):
+            out_x.append(x1)
+            out_n.append(n1)
+    return np.array(out_x), np.array(out_n)
+
+
 def resample_closed_loop(xs, ns, spacing=4.0):
     """Resample a closed loop (x, north arrays, first point != last point) to
     ~spacing meters using a periodic cubic spline. Returns (xs_r, ns_r)."""
@@ -48,6 +76,7 @@ def resample_closed_loop(xs, ns, spacing=4.0):
         if abs(xs[i] - xs[i - 1]) < 1e-9 and abs(ns[i] - ns[i - 1]) < 1e-9:
             keep[i] = False
     xs, ns = xs[keep], ns[keep]
+    xs, ns = _densify(xs, ns)
 
     n_pts = len(xs)
     s = n_pts * 0.5

@@ -228,8 +228,8 @@ export class SceneRenderer {
     u.sunPosition.value.copy(this.sunDir);
     u.turbidity.value = overcast ? 20 : p.turbidity;
     u.rayleigh.value = overcast ? 0.8 : p.rayleigh;
-    u.mieCoefficient.value = overcast ? 0.02 : 0.005;
-    u.mieDirectionalG.value = 0.92;
+    u.mieCoefficient.value = overcast ? 0.02 : time === 'noon' ? 0.005 : 0.0025;
+    u.mieDirectionalG.value = time === 'noon' ? 0.9 : 0.975;
     this.skyScale.value = time === 'night' ? 0.12 : time === 'noon' ? 0.32 : 0.62;
     this.sun.color.set(p.sunColor);
     this.sun.intensity = p.sunIntensity * (overcast ? 0.35 : 1);
