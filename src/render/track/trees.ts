@@ -13,7 +13,10 @@ import { makeRng } from '../../core/math';
 import { terrainHeightAt } from './terrain';
 import type { Disposables } from './types';
 
+/** Fallback clearance used on narrow sections; the corridor (barrierDistance + margin) wins on wide ones. */
 const MIN_DISTANCE_M = 28;
+/** Matches the terrain's flat corridor width (see terrain.ts CORRIDOR_MARGIN_M) so trees never land on it. */
+const CORRIDOR_MARGIN_M = 6;
 const FIELD_MARGIN_M = 220;
 const CLUSTER_COUNT = 14;
 const CLUSTER_RADIUS = 90;
@@ -79,7 +82,8 @@ function generatePlacements(track: Track, count: number): Placement[] {
     probe.set(x, 0, z);
     const q = track.query(probe, hint);
     hint = q.index;
-    if (Math.abs(q.lateral) < MIN_DISTANCE_M) continue;
+    const clearance = Math.max(MIN_DISTANCE_M, track.barrierDistance(q.index) + CORRIDOR_MARGIN_M);
+    if (Math.abs(q.lateral) < clearance) continue;
     placements.push({ x, z, variant: rng() < 0.5 ? 0 : 1, scale: 0.75 + rng() * 0.6, hint });
   }
   return placements;

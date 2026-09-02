@@ -2,7 +2,11 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'tools', 'public'] },
+  // engine-processor.js runs in the AudioWorkletGlobalScope (registerProcessor,
+  // AudioWorkletProcessor, sampleRate are worklet globals, not browser/node ones)
+  // and is shipped verbatim via a `?raw` import, so it is intentionally outside
+  // the TS lint domain below.
+  { ignores: ['dist', 'node_modules', 'tools', 'public', 'src/audio/worklet/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

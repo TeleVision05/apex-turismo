@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
-import { makeButton, makeCycle } from '../widgets';
+import { makeButton, makeCycle, makeScreenHeader } from '../widgets';
 import { TIME_OF_DAY_OPTIONS, TRANSMISSION_OPTIONS } from './raceOptions';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -16,7 +16,7 @@ class TimeTrialScreen implements Screen {
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-timetrial');
     const panel = el('div', 'side-panel panel');
-    panel.append(el('div', 'section-label', 'Time Trial'), this.body);
+    panel.append(makeScreenHeader('stopwatch', 'Time Trial'), this.body);
     this.el.appendChild(panel);
     this.state = {
       trackId: '',

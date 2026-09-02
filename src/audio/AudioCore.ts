@@ -19,6 +19,8 @@ export interface AudioCore {
   raceEngineGain: GainNode;
   /** tyre/wind/ambience loops connect here; muted with the engine on pause */
   raceLoopGain: GainNode;
+  /** global -12dB/oct ceiling on every engine voice, opens slightly with throttle */
+  engineLowpass: BiquadFilterNode;
 }
 
 function resolveCtor(): (new () => AudioContext) | null {
@@ -43,6 +45,10 @@ export function createAudioCore(): AudioCore | null {
     const compressor = ctx.createDynamicsCompressor();
     const raceEngineGain = ctx.createGain();
     const raceLoopGain = ctx.createGain();
+    const engineLowpass = ctx.createBiquadFilter();
+    // gentle master-bus high-shelf cut so the whole mix sits a touch darker,
+    // on top of the per-voice shaping already done in the engine chain.
+    const masterHighShelf = ctx.createBiquadFilter();
 
     engineBus.gain.value = 1;
     effectsBus.gain.value = 1;
@@ -55,13 +61,19 @@ export function createAudioCore(): AudioCore | null {
     compressor.ratio.value = 3;
     compressor.attack.value = 0.006;
     compressor.release.value = 0.25;
+    engineLowpass.type = 'lowpass';
+    engineLowpass.frequency.value = 3800;
+    engineLowpass.Q.value = 0.7;
+    masterHighShelf.type = 'highshelf';
+    masterHighShelf.frequency.value = 2500;
+    masterHighShelf.gain.value = -6;
 
-    raceEngineGain.connect(engineBus);
+    raceEngineGain.connect(engineLowpass).connect(engineBus);
     raceLoopGain.connect(effectsBus);
     engineBus.connect(masterGain);
     effectsBus.connect(masterGain);
     musicBus.connect(masterGain);
-    masterGain.connect(compressor);
+    masterGain.connect(masterHighShelf).connect(compressor);
 
     let analyser: AnalyserNode | null = null;
     if (typeof ctx.createAnalyser === 'function') {
@@ -89,6 +101,7 @@ export function createAudioCore(): AudioCore | null {
       analyser,
       raceEngineGain,
       raceLoopGain,
+      engineLowpass,
     };
   } catch {
     return null;
@@ -149,7 +162,7 @@ export function noiseBuffer(
 
 /** A persistent, looping noise source through a filter — the common intake/tyre/wind building block. */
 export function loopingNoise(
-  ctx: AudioContext,
+  ctx: BaseAudioContext,
   seconds: number,
   color: NoiseColor,
 ): AudioBufferSourceNode {

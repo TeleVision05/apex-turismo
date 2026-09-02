@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtHp, fmtKg, fmtKm, fmtNm, fmtPP, titleCase } from '../format';
-import { makeButton, makeCard, makeSwatch } from '../widgets';
+import { makeButton, makeCard, makeScreenHeader, makeSwatch } from '../widgets';
 import { POWER_STAGES, WEIGHT_STAGES } from '../../physics/Tuning';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -26,7 +26,7 @@ class GarageScreen implements Screen {
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-garage');
     const panel = el('div', 'side-panel panel');
-    panel.appendChild(el('div', 'section-label', 'Garage'));
+    panel.appendChild(makeScreenHeader('car', 'Garage'));
     panel.append(this.list, this.detail);
     this.el.appendChild(panel);
   }

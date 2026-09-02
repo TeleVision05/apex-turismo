@@ -127,7 +127,7 @@ def _bridge_rings(bm, ring_a, ring_b):
         bm.faces.new((v1, v2, v3, v4))
 
 
-def _stations(lo, hi, step=0.04):
+def _stations(lo, hi, step=0.02):
     n = max(2, int(round((hi - lo) / step)) + 1)
     return [lo + (hi - lo) * i / (n - 1) for i in range(n)]
 
@@ -163,15 +163,42 @@ def _finalize_single_material(obj, mat):
         p.material_index = 0
 
 
-# --------------------------------------------------------- lower body ----
+N_PER_CORNER = 9  # keep in sync with curves.rounded_trapezoid_section default
+
+
+def _character_line_indices(n=N_PER_CORNER):
+    """Ring-point indices (into a 4n+4 rounded_trapezoid_section, edge_mid=
+    True) that trace the shoulder crease (max-width edge-mid points) and the
+    belt line (base of the top corner arc, where the door/fender's vertical
+    flank rolls over into the greenhouse-facing shoulder)."""
+    shoulder = (n, 3 * n + 2)          # right/left edge-mid points
+    belt = (n + 1, 3 * n + 1)          # TR-arc start / TL-arc end
+    return shoulder, belt
+
+
+def _hood_bulge_extra(spec, x, L):
+    """Extra crown height (m) for a power-dome hood bulge, a smooth cosine
+    ridge centred over the hood between the nose and the cowl."""
+    if not spec.get("hood_bulge"):
+        return 0.0
+    xa_frac = 0.40
+    hood_end = xa_frac * L * 0.92
+    hood_start = 0.06 * L
+    if x < hood_start or x > hood_end:
+        return 0.0
+    t = (x - hood_start) / max(0.01, hood_end - hood_start)
+    return 0.028 * math.sin(math.pi * t)
+
+
 def build_lower_body_block(spec, b, cv):
-    stations_x = _stations(0.0, cv["L"], 0.04)
+    stations_x = _stations(0.0, cv["L"], 0.02)
     rb = 0.06
     bm = bmesh.new()
     grid = []
     for x in stations_x:
         w, zf, zt, rt = cv["w"](x), cv["zf"](x), cv["zt"](x), cv["rt"](x)
-        section = curvemod.rounded_trapezoid_section(w, w, zf, zt, rb, rt, crown=0.02)
+        crown = 0.02 + _hood_bulge_extra(spec, x, cv["L"])
+        section = curvemod.rounded_trapezoid_section(w, w, zf, zt, rb, rt, crown=crown)
         grid.append(_to_verts(bm, section, x, b))
     for i in range(len(grid) - 1):
         _bridge_rings(bm, grid[i], grid[i + 1])
@@ -181,6 +208,23 @@ def build_lower_body_block(spec, b, cv):
         except ValueError:
             pass
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+
+    # Crease the shoulder and belt character lines (edge creases, not hard
+    # edges) along the longitudinal seams identified above, so Subdivision
+    # keeps them reading as sharp lines instead of smoothing them away.
+    crease_layer = bm.edges.layers.float.new("crease_edge")
+    shoulder_idx, belt_idx = _character_line_indices()
+    for i in range(len(grid) - 1):
+        ring_a, ring_b = grid[i], grid[i + 1]
+        for idx in shoulder_idx:
+            e = bm.edges.get((ring_a[idx], ring_b[idx]))
+            if e:
+                e[crease_layer] = 0.65
+        for idx in belt_idx:
+            e = bm.edges.get((ring_a[idx], ring_b[idx]))
+            if e:
+                e[crease_layer] = 0.55
+
     obj = _new_object("BodyBlock")
     bm.to_mesh(obj.data)
     bm.free()
@@ -311,6 +355,13 @@ def finish_body(block, materials):
     bpy.context.view_layer.objects.active = block
     bpy.ops.object.modifier_apply(modifier=bevel.name)
 
+    # Level 2 was tried against the 2cm/40-point control mesh but pushed a
+    # simple car (sakura_86, no wing/vents) to 144k tris on its own - too
+    # close to the 150k/car ceiling once wings, vents and box arches are
+    # added on the heavier cars. Level 1 on this denser, creased control
+    # mesh (measured 78.8k tris for sakura_86, see README) keeps every car
+    # comfortably inside budget while still reading far crisper than the
+    # original 4cm/28-point/level-1 mesh.
     subsurf = block.modifiers.new("Subdivision", 'SUBSURF')
     subsurf.levels = 1
     subsurf.render_levels = 1

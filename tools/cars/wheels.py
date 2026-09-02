@@ -54,31 +54,42 @@ def _cap_annulus(bm, ring_outer, ring_inner, mat_index, flip=False):
 
 
 def build_wheel(name, radius, tyre_width, spoke_count=7):
-    """Build one Wheel_* object: tyre (mat 0 = Rubber) + rim (mat 1 = Rim)."""
+    """Build one Wheel_* object: tyre (mat 0 = Rubber) + rim (mat 1 = Rim).
+    The rim is a genuinely open face - a hub + thin spokes reaching to a
+    slim outer lip, with real gaps between spokes - so the brake disc/
+    caliper (a separate static object at the same hub) is visible through
+    it, per the brief. An earlier version closed that gap with a full
+    360 deg barrel at the spoke tips, which hid the brake entirely; that
+    barrel is gone; only a slim outer lip band (flush with the tyre bead,
+    much narrower than the old barrel) remains for a finished edge."""
     bm = bmesh.new()
     hw = tyre_width / 2.0
     inner_r = radius * 0.60  # rim seat radius (also the tyre's open hole)
+    segs = 32
 
-    # --- tyre: 3 rings (slightly pinched sidewalls) + 2 annulus caps ---
-    ring_l = _ring(bm, -hw, radius * 0.94, 24)
-    ring_m = _ring(bm, 0.0, radius, 24)
-    ring_r = _ring(bm, hw, radius * 0.94, 24)
+    # --- tyre: 3 rings (rounded shoulder + sidewall bevel) + 2 annulus caps
+    ring_l = _ring(bm, -hw, radius * 0.94, segs)
+    ring_m = _ring(bm, 0.0, radius, segs)
+    ring_r = _ring(bm, hw, radius * 0.94, segs)
     _bridge_rings(bm, ring_l, ring_m, 0)
     _bridge_rings(bm, ring_m, ring_r, 0)
-    hole_l = _ring(bm, -hw, inner_r, 24)
-    hole_r = _ring(bm, hw, inner_r, 24)
+    hole_l = _ring(bm, -hw, inner_r, segs)
+    hole_r = _ring(bm, hw, inner_r, segs)
     _cap_annulus(bm, ring_l, hole_l, 0, flip=True)
     _cap_annulus(bm, ring_r, hole_r, 0, flip=False)
+    # sidewall bevel: a slim extra ring just inside the tyre shoulder on
+    # each face so the sidewall isn't a single flat annulus
+    bevel_l = _ring(bm, -hw * 0.7, inner_r * 1.06, segs)
+    bevel_r = _ring(bm, hw * 0.7, inner_r * 1.06, segs)
+    _bridge_rings(bm, hole_l, bevel_l, 0)
+    _bridge_rings(bm, hole_r, bevel_r, 0)
 
-    # --- rim: hub barrel + N spokes + outer barrel ring (mat 1 = Rim) ---
+    # --- rim: hub barrel + N thin spokes + slim outer lip (mat 1 = Rim) ---
     rim_w = hw * 0.85
     hub_r = radius * 0.16
     hub_l = _ring(bm, -rim_w * 0.5, hub_r, 16)
     hub_r_ring = _ring(bm, rim_w * 0.5, hub_r, 16)
     _bridge_rings(bm, hub_l, hub_r_ring, 1)
-    barrel_l = _ring(bm, -rim_w * 0.5, inner_r * 0.98, 24)
-    barrel_r = _ring(bm, rim_w * 0.5, inner_r * 0.98, 24)
-    _bridge_rings(bm, barrel_l, barrel_r, 1)
     # hub cap (disc) at the outboard face so the centre doesn't look hollow
     hub_cap_centre = bm.verts.new((rim_w * 0.5, 0.0, 0.0))
     n = len(hub_r_ring)
@@ -87,15 +98,15 @@ def build_wheel(name, radius, tyre_width, spoke_count=7):
         f = bm.faces.new((v1, v2, hub_cap_centre))
         f.material_index = 1
 
+    lip_r = inner_r * 0.98
+    half_ang = math.pi / spoke_count * 0.30  # narrower spokes, wider gaps
     for s in range(spoke_count):
         a = 2 * math.pi * s / spoke_count
-        ca, sa = math.cos(a), math.sin(a)
-        half_ang = math.pi / spoke_count * 0.42
         ca1, sa1 = math.cos(a - half_ang), math.sin(a - half_ang)
         ca2, sa2 = math.cos(a + half_ang), math.sin(a + half_ang)
         x0, x1 = -rim_w * 0.5, rim_w * 0.5
         hp = hub_r * 0.96
-        bp = inner_r * 0.98
+        bp = lip_r
         v = [
             bm.verts.new((x0, hp * ca1, hp * sa1)),
             bm.verts.new((x0, hp * ca2, hp * sa2)),
@@ -111,6 +122,14 @@ def build_wheel(name, radius, tyre_width, spoke_count=7):
         for q in quads:
             f = bm.faces.new([v[i] for i in q])
             f.material_index = 1
+    # slim outer lip band (structural rim flange at the tyre bead) - much
+    # narrower than a full barrel so it doesn't curtain off the spoke gaps
+    lip_l = _ring(bm, -rim_w * 0.5, lip_r, segs)
+    lip_r_ring = _ring(bm, -rim_w * 0.5 + rim_w * 0.06, lip_r, segs)
+    _bridge_rings(bm, lip_l, lip_r_ring, 1)
+    lip_l2 = _ring(bm, rim_w * 0.5 - rim_w * 0.06, lip_r, segs)
+    lip_r2 = _ring(bm, rim_w * 0.5, lip_r, segs)
+    _bridge_rings(bm, lip_l2, lip_r2, 1)
 
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)

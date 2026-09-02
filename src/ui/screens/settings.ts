@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtPct, titleCase } from '../format';
-import { makeButton, makeCycle, makeSlider, makeToggle } from '../widgets';
+import { makeButton, makeCycle, makeScreenHeader, makeSlider, makeToggle } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { CameraMode, GraphicsSettings } from '../../core/types';
@@ -43,7 +43,7 @@ class SettingsScreen implements Screen {
     panel.style.cssText =
       'position:absolute;top:clamp(16px,3vh,32px);left:clamp(16px,3vw,40px);bottom:clamp(16px,3vh,32px);' +
       'width:min(48vw,600px);display:flex;flex-direction:column;padding:clamp(16px,2.4vh,28px);gap:6px;';
-    panel.append(el('div', 'section-label', 'Settings'), this.body);
+    panel.append(makeScreenHeader('sliders', 'Settings'), this.body);
     this.el.appendChild(panel);
   }
 

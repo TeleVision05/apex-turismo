@@ -108,6 +108,50 @@
   min-height: 0;
 }
 
+/* ---------- Icons ---------- */
+
+.gt-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+.gt-btn-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.gt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gt-btn-label {
+  line-height: 1;
+}
+
+/* ---------- Screen header row (icon + title, every panel) ---------- */
+
+.screen-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.screen-header-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+  opacity: 0.85;
+}
+
+.screen-header-text {
+  line-height: 1;
+}
+
 /* ---------- Header bar (home) ---------- */
 
 .top-bar {
@@ -118,13 +162,51 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: clamp(14px, 2.4vh, 24px) clamp(20px, 3vw, 40px);
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+  padding: clamp(18px, 2.8vh, 28px) clamp(20px, 3vw, 40px) clamp(14px, 2.4vh, 24px);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.62), transparent);
+}
+
+.top-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wordmark-emblem {
+  width: 26px;
+  height: 26px;
+  color: var(--gold);
+  filter: drop-shadow(0 0 8px rgba(232, 185, 35, 0.5));
+}
+
+.wordmark-text {
+  font-size: clamp(16px, 1.8vw, 21px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fff;
+}
+
+.credits-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.credits-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
 }
 
 .top-bar .credits {
   color: var(--gold);
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(16px, 1.7vw, 20px);
   font-weight: 700;
 }
 
@@ -147,6 +229,77 @@
 .top-bar .car-pp {
   color: var(--blue);
   font-size: 13px;
+}
+
+/* ---------- Career progress strip (home) ---------- */
+
+.home-progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  z-index: 1;
+}
+
+.home-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(to right, var(--blue), var(--gold));
+  transition: width 400ms ease;
+}
+
+/* ---------- Left-veil + news ticker (home) ---------- */
+
+.home-bg-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(4, 4, 6, 0.78) 0%,
+    rgba(4, 4, 6, 0.42) 42%,
+    transparent 62%
+  );
+  pointer-events: none;
+}
+
+.home-ticker {
+  position: absolute;
+  left: clamp(20px, 3vw, 40px);
+  bottom: clamp(14px, 2.4vh, 22px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(56vw, 560px);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.home-ticker-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--gold);
+  opacity: 0.8;
+  flex: 0 0 auto;
+}
+
+.home-ticker-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: tickerFade 400ms ease;
+}
+
+@keyframes tickerFade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---------- Buttons & rows ---------- */
@@ -474,10 +627,13 @@
 }
 
 .gt-tile {
+  position: relative;
   font-family: inherit;
   text-align: left;
-  background: var(--panel-bg);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 55%), var(--panel-bg);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   color: #fff;
@@ -487,17 +643,95 @@
   flex-direction: column;
   justify-content: flex-end;
   gap: 4px;
+  overflow: hidden;
   transition:
     border-color 150ms,
     background 150ms,
-    transform 150ms;
+    transform 150ms,
+    box-shadow 150ms;
 }
 
 .gt-tile:hover,
 .gt-tile.focused {
   border-color: var(--gold);
-  background: rgba(232, 185, 35, 0.12);
-  transform: translateY(-2px);
+  background:
+    linear-gradient(135deg, rgba(232, 185, 35, 0.22), rgba(232, 185, 35, 0.04) 55%), var(--panel-bg);
+  transform: translateY(-3px);
+}
+
+.gt-tile.focused {
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 185, 35, 0.5),
+    0 0 22px rgba(232, 185, 35, 0.28);
+}
+
+.gt-tile-icon {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  width: 40px;
+  height: 40px;
+  color: var(--text-dimmer);
+  transition:
+    color 150ms,
+    filter 150ms;
+}
+
+.gt-tile:hover .gt-tile-icon,
+.gt-tile.focused .gt-tile-icon {
+  color: var(--gold);
+  filter: drop-shadow(0 0 6px rgba(232, 185, 35, 0.45));
+}
+
+.gt-tile-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.16) 45%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+}
+
+.home-tiles.sweep .gt-tile-sweep {
+  animation: tileSweep 900ms ease-out;
+}
+
+.gt-tile:nth-child(2) .gt-tile-sweep {
+  animation-delay: 60ms;
+}
+.gt-tile:nth-child(3) .gt-tile-sweep {
+  animation-delay: 120ms;
+}
+.gt-tile:nth-child(4) .gt-tile-sweep {
+  animation-delay: 40ms;
+}
+.gt-tile:nth-child(5) .gt-tile-sweep {
+  animation-delay: 100ms;
+}
+.gt-tile:nth-child(6) .gt-tile-sweep {
+  animation-delay: 160ms;
+}
+.gt-tile:nth-child(7) .gt-tile-sweep {
+  animation-delay: 80ms;
+}
+.gt-tile:nth-child(8) .gt-tile-sweep {
+  animation-delay: 140ms;
+}
+.gt-tile:nth-child(9) .gt-tile-sweep {
+  animation-delay: 200ms;
+}
+
+@keyframes tileSweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(120%);
+  }
 }
 
 .gt-tile-title {
@@ -505,6 +739,7 @@
   font-size: clamp(14px, 1.3vw, 17px);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  margin-top: 26px;
 }
 
 .gt-tile-desc {
@@ -526,6 +761,14 @@
   background: radial-gradient(ellipse at center, rgba(20, 20, 26, 0.2), rgba(4, 4, 6, 0.75));
 }
 
+.title-emblem {
+  width: clamp(44px, 6vw, 64px);
+  height: clamp(44px, 6vw, 64px);
+  color: var(--gold);
+  filter: drop-shadow(0 0 22px rgba(232, 185, 35, 0.55));
+  margin-bottom: 4px;
+}
+
 .title-wrap .game-title {
   font-size: clamp(40px, 7vw, 84px);
   font-weight: 800;
@@ -542,10 +785,35 @@
 }
 
 .title-wrap .press-start {
+  position: relative;
   margin-top: 40px;
+  padding-bottom: 10px;
   font-size: 14px;
   color: var(--text-dim);
   animation: pulse 1.8s ease-in-out infinite;
+}
+
+.press-start-underline {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 120px;
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(to right, transparent, var(--gold), transparent);
+  animation: underlineSweep 2.4s ease-in-out infinite;
+}
+
+@keyframes underlineSweep {
+  0%,
+  100% {
+    opacity: 0.25;
+    width: 60px;
+  }
+  50% {
+    opacity: 1;
+    width: 160px;
+  }
 }
 
 .title-wrap .driver-credit {
@@ -755,12 +1023,20 @@
 
 .pause-title,
 .results-title {
+  justify-content: center;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.16em;
   font-size: 14px;
   color: var(--gold);
   margin-bottom: 6px;
+}
+
+.pause-title .screen-header-icon,
+.results-title .screen-header-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 1;
 }
 
 .results-table-wrap {

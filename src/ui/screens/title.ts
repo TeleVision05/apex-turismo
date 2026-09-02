@@ -1,13 +1,17 @@
 import { el } from '../dom';
+import { icon } from '../icons';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 
 /** Title screen: also the audio-unlock gesture (any key/click). */
 export function createTitleScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-title');
   const wrap = el('div', 'title-wrap');
+  wrap.appendChild(icon('emblem', 'title-emblem'));
   wrap.appendChild(el('div', 'game-title', 'APEX TURISMO'));
   wrap.appendChild(el('div', 'game-subtitle', 'The Real Driving Simulator'));
-  wrap.appendChild(el('div', 'press-start', 'Press any key or click to start'));
+  const press = el('div', 'press-start', 'Press any key or click to start');
+  press.appendChild(el('div', 'press-start-underline'));
+  wrap.appendChild(press);
   root.appendChild(wrap);
 
   const driverCredit = el('div', 'driver-credit', '');

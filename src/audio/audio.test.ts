@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine } from './index';
 import type { AudioEngine, CarAudioState } from './AudioContract';
+import { ENGINE_PRESETS, firingFrequency, jitterAt } from './EnginePresets';
+import { ensureExhaustWorklet, workletAvailable } from './engine/ExhaustWorklet';
 
 /** A minimal AudioParam stand-in that records automation calls without doing real math. */
 class MockAudioParam {
@@ -222,5 +224,85 @@ describe('audio engine: after resume()', () => {
     engine.playCollision(1, 2, 2);
     const afterTwo = countNodes();
     expect(afterTwo).toBe(afterOne);
+  });
+});
+
+describe('physically-inspired engine model', () => {
+  const kinds: CarAudioState['engine'][] = ['i4', 'i6', 'v6', 'v8', 'rotary', 'flat6', 'v8hybrid'];
+
+  it('every preset resolves to a stable, positive firing frequency and pattern', () => {
+    for (const kind of kinds) {
+      const preset = ENGINE_PRESETS[kind];
+      expect(preset.firePattern.length).toBeGreaterThan(0);
+      expect(firingFrequency(6000, kind)).toBeCloseTo((6000 / 60) * preset.pulsesPerRev, 5);
+      expect(firingFrequency(0, kind)).toBeGreaterThan(0); // never zero/negative at idle-off
+    }
+    // V8 cross-plane firing is the classic uneven "burble"; I4 is even.
+    expect(ENGINE_PRESETS.v8.firePattern.some((p) => p.mult !== 1)).toBe(true);
+    expect(ENGINE_PRESETS.i4.firePattern.every((p) => p.mult === 1)).toBe(true);
+    // rotary fires 3 smooth pulses per revolution, per spec.
+    expect(ENGINE_PRESETS.rotary.pulsesPerRev).toBe(3);
+    // only the supercharged Stallion GT500's engine kind carries a supercharger whine.
+    expect(ENGINE_PRESETS.v8.supercharger).toBe(true);
+    expect(kinds.filter((k) => ENGINE_PRESETS[k].supercharger)).toEqual(['v8']);
+  });
+
+  it('jitter is larger near idle than near redline for every preset', () => {
+    for (const kind of kinds) {
+      expect(jitterAt(kind, 0)).toBeGreaterThanOrEqual(jitterAt(kind, 1));
+    }
+  });
+
+  it('falls back cleanly (no worklet) when AudioContext lacks audioWorklet', async () => {
+    installMockAudioContext();
+    const ctx = new (
+      globalThis as unknown as { AudioContext: new () => AudioContext }
+    ).AudioContext();
+    expect(workletAvailable(ctx)).toBe(false);
+    await expect(ensureExhaustWorklet(ctx)).resolves.toBe(false);
+    uninstallMockAudioContext();
+  });
+
+  it('drives every engine kind (incl. supercharger/hybrid/rotary paths) without throwing', async () => {
+    installMockAudioContext();
+    const engine = createAudioEngine();
+    await engine.resume();
+    for (const kind of kinds) {
+      expect(() =>
+        engine.updateCars([car({ id: 0, isPlayer: true, engine: kind, rpm: 6500 })], 1 / 60),
+      ).not.toThrow();
+    }
+    uninstallMockAudioContext();
+  });
+
+  it('handles a full throttle-lift overrun and a downshift blip without throwing', async () => {
+    installMockAudioContext();
+    const engine = createAudioEngine();
+    await engine.resume();
+    const highRpm = { id: 0, isPlayer: true, engine: 'v8' as const, rpm: 6800, throttle: 0.9 };
+    engine.updateCars([car(highRpm)], 1 / 60);
+    // lift off throttle above 50% of the rev range -> overrun pop scheduler engages
+    expect(() => engine.updateCars([car({ ...highRpm, throttle: 0.05 })], 1 / 60)).not.toThrow();
+    // a downshift (lower gear while still shifting) -> rev-match blip
+    expect(() =>
+      engine.updateCars([car({ ...highRpm, throttle: 0.05, gear: 2, shifting: true })], 1 / 60),
+    ).not.toThrow();
+    uninstallMockAudioContext();
+  });
+
+  it('applies a doppler-driven frequency nudge for a fast-closing other car', async () => {
+    installMockAudioContext();
+    const engine = createAudioEngine();
+    await engine.resume();
+    const approaching = car({ id: 1, relX: 0, relY: 0, relZ: 50, rpm: 5000 });
+    engine.updateCars([car({ id: 0, isPlayer: true }), approaching], 1 / 60);
+    // next frame: much closer, same dt -> a large closing speed
+    expect(() =>
+      engine.updateCars(
+        [car({ id: 0, isPlayer: true }), car({ ...approaching, relZ: 20 })],
+        1 / 60,
+      ),
+    ).not.toThrow();
+    uninstallMockAudioContext();
   });
 });

@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
-import { makeButton, makeCycle, makeSlider, makeToggle } from '../widgets';
+import { makeButton, makeCycle, makeScreenHeader, makeSlider, makeToggle } from '../widgets';
 import {
   DIFFICULTY_OPTIONS,
   TIME_OF_DAY_OPTIONS,
@@ -32,7 +32,7 @@ class CustomScreen implements Screen {
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-custom');
     const panel = el('div', 'side-panel panel');
-    panel.append(el('div', 'section-label', 'Custom Race'), this.body);
+    panel.append(makeScreenHeader('flag', 'Custom Race'), this.body);
     this.el.appendChild(panel);
     this.state = {
       trackId: '',

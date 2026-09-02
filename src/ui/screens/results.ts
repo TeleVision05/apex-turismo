@@ -1,7 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtCredits } from '../format';
 import { formatDelta, formatLapTime } from '../../core/math';
-import { makeButton } from '../widgets';
+import { makeButton, makeScreenHeader } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { RaceResult, RaceResultEntry } from '../../core/types';
@@ -29,7 +29,7 @@ class ResultsScreen implements Screen {
     const creditsBox = el('div', 'results-credits');
     creditsBox.appendChild(this.creditsValue);
     box.append(
-      el('div', 'results-title', 'Results'),
+      makeScreenHeader('trophy', 'Results', 'results-title'),
       this.tableWrap,
       creditsBox,
       this.recordBanner,
@@ -96,23 +96,31 @@ class ResultsScreen implements Screen {
     this.buildTable(this.last);
     this.recordBanner.classList.toggle('hidden', !this.last.newRecord);
     this.animateCredits(this.last.creditsEarned);
-    const replay = makeButton('Watch replay', () => {
-      this.ctx.sound('confirm');
-      this.ctx.facade.startReplay();
-      this.ctx.show('replay');
-    });
+    const replay = makeButton(
+      'Watch replay',
+      () => {
+        this.ctx.sound('confirm');
+        this.ctx.facade.startReplay();
+        this.ctx.show('replay');
+      },
+      { icon: 'replay' },
+    );
     const cont = makeButton(
       'Continue',
       () => {
         this.ctx.sound('confirm');
         this.ctx.facade.quitToHome();
       },
-      { className: 'primary' },
+      { className: 'primary', icon: 'continue' },
     );
-    const restart = makeButton('Restart', () => {
-      this.ctx.sound('confirm');
-      this.ctx.facade.restartRace();
-    });
+    const restart = makeButton(
+      'Restart',
+      () => {
+        this.ctx.sound('confirm');
+        this.ctx.facade.restartRace();
+      },
+      { icon: 'restart' },
+    );
     this.buttons.append(replay.el, cont.el, restart.el);
     this.focusItems.push(replay.item, cont.item, restart.item);
   }

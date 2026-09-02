@@ -8,6 +8,7 @@ import { buildTerrain } from './terrain';
 import { buildBridgeSupports } from './bridgeSupports';
 import { buildTrees } from './trees';
 import { buildFurniture } from './furniture';
+import { buildDressing } from './dressing';
 import { buildRacingLineRibbon } from './racingLine';
 import { buildMinimap } from './minimap';
 import { buildTextureSet } from './textures';
@@ -51,6 +52,7 @@ function buildParts(track: Track, options: TrackSceneOptions): SceneParts {
   const bridges = buildBridgeSupports(track);
   const trees = buildTrees(track, quality.treeCount);
   const furniture = buildFurniture(track, options);
+  const dressing = buildDressing(track, options);
 
   group.add(
     road.group,
@@ -61,6 +63,7 @@ function buildParts(track: Track, options: TrackSceneOptions): SceneParts {
     bridges.group,
     trees.group,
     furniture.group,
+    dressing.group,
   );
   mergeDisposables(
     disposables,
@@ -72,6 +75,7 @@ function buildParts(track: Track, options: TrackSceneOptions): SceneParts {
     bridges.disposables,
     trees.disposables,
     furniture.disposables,
+    dressing.disposables,
   );
 
   let racingLineMesh: Mesh | null = null;

@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtPP } from '../format';
-import { makeButton, makeSlider } from '../widgets';
+import { makeButton, makeScreenHeader, makeSlider } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { UpgradeInfo } from '../UiContract';
@@ -27,7 +27,7 @@ class TuningScreen implements Screen {
     this.el = el('div', 'screen screen-tuning');
     const panel = el('div', 'side-panel panel');
     panel.append(
-      el('div', 'section-label', 'Tuning Shop'),
+      makeScreenHeader('wrench', 'Tuning Shop'),
       this.carName,
       this.ppReadout,
       this.body,

@@ -1,5 +1,6 @@
 import type { CarAudioState } from './AudioContract';
 import type { AudioCore } from './AudioCore';
+import { ensureExhaustWorklet } from './engine/ExhaustWorklet';
 import { EngineVoice } from './EngineVoice';
 import { TyreVoice } from './TyreVoice';
 
@@ -21,14 +22,17 @@ export class CarVoicePool {
   private otherSlots: Slot[] = [];
 
   constructor(private core: AudioCore) {
-    this.playerSlot = this.makeSlot();
-    for (let i = 0; i < MAX_OTHER_VOICES; i++) this.otherSlots.push(this.makeSlot());
+    // Registered once per context; every voice awaits the same promise and
+    // upgrades from its oscillator fallback the moment the worklet is ready.
+    const workletReady = ensureExhaustWorklet(core.ctx);
+    this.playerSlot = this.makeSlot(workletReady);
+    for (let i = 0; i < MAX_OTHER_VOICES; i++) this.otherSlots.push(this.makeSlot(workletReady));
   }
 
-  private makeSlot(): Slot {
+  private makeSlot(workletReady: Promise<boolean>): Slot {
     return {
       carId: null,
-      engine: new EngineVoice(this.core.ctx, this.core.raceEngineGain),
+      engine: new EngineVoice(this.core.ctx, this.core.raceEngineGain, workletReady),
       tyre: new TyreVoice(this.core.ctx, this.core.raceLoopGain),
     };
   }

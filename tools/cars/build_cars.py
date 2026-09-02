@@ -56,22 +56,36 @@ def _build_body_and_glass(spec, curves, bounds, mats):
 
 
 def _build_detail_groups(spec, curves, bounds, mats, well_shells, wing_trim):
+    # Compound lights/plate/fog details each return a material-routed tuple
+    # ((trim[, chrome])[, lens]) since a contract object may carry only its
+    # one named material - collect each destination separately here.
+    hl_trim, hl_chrome, hl_lens = details.build_headlights(spec, curves, bounds, mats)
+    tl_trim, tl_lens = details.build_taillights(spec, curves, bounds, mats)
+    fog_trim, fog_chrome, fog_lens = details.build_front_bumper_detail(spec, curves, bounds, mats)
+    plate_trim, plate_chrome = details.build_license_plate(spec, curves, bounds, mats)
+
     trim_parts = (details.build_mirrors(spec, curves, bounds, mats)
                   + details.build_grille(spec, curves, bounds, mats)
                   + details.build_bumper_lips(spec, curves, bounds, mats)
                   + details.build_splitter_diffuser(spec, curves, bounds, mats)
+                  + details.build_door_details(spec, curves, bounds, mats)
+                  + details.build_antenna(spec, curves, bounds, mats)
+                  + details.build_side_scoops(spec, curves, bounds, mats)
+                  + details.build_rear_vents(spec, curves, bounds, mats)
+                  + details.build_fin(spec, curves, bounds, mats)
+                  + hl_trim + tl_trim + fog_trim + plate_trim
                   + wing_trim + well_shells)
     trim_obj = _finalize_group(export_mod.join_group(trim_parts, "Trim"), mats["Trim"])
 
-    chrome_parts = details.build_exhaust(spec, curves, bounds, mats) + details.build_badge(spec, curves, bounds, mats)
+    chrome_parts = (details.build_exhaust(spec, curves, bounds, mats)
+                     + details.build_badge(spec, curves, bounds, mats)
+                     + hl_chrome + fog_chrome + plate_chrome)
     chrome_obj = _finalize_group(export_mod.join_group(chrome_parts, "Chrome"), mats["Chrome"])
 
     headlight_obj = _finalize_group(
-        export_mod.join_group(details.build_headlights(spec, curves, bounds, mats), "Headlights"),
-        mats["Headlight"])
+        export_mod.join_group(hl_lens + fog_lens, "Headlights"), mats["Headlight"])
     taillight_obj = _finalize_group(
-        export_mod.join_group(details.build_taillights(spec, curves, bounds, mats), "Taillights"),
-        mats["Taillight"])
+        export_mod.join_group(tl_lens, "Taillights"), mats["Taillight"])
     brakelight_obj = _finalize_group(
         export_mod.join_group(details.build_brakelights(spec, curves, bounds, mats), "Brakelights"),
         mats["Brakelight"])

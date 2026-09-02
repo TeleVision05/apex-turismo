@@ -1,38 +1,30 @@
 import { createAudioEngine } from '../../src/audio';
 import type { AudioEngine, CarAudioState } from '../../src/audio/AudioContract';
+import { buildAnalysisApi } from './debugAnalysis';
+import { renderPresetSweep, saveSweepToLocalServer } from './debugRender';
 
 type DebugEngine = AudioEngine & { __audioDebugAnalyser(): AnalyserNode | null };
 
 const engine = createAudioEngine() as DebugEngine;
 
-const analyserApi = {
-  getAnalyser: (): AnalyserNode | null => engine.__audioDebugAnalyser(),
-  /** Returns { rms, peakFreq } sampled from the master bus analyser. */
-  sample(): { rms: number; peakFreq: number | null } | null {
-    const analyser = analyserApi.getAnalyser();
-    if (!analyser) return null;
-    const timeData = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(timeData);
-    let sumSquares = 0;
-    for (let i = 0; i < timeData.length; i++) sumSquares += timeData[i] * timeData[i];
-    const rms = Math.sqrt(sumSquares / timeData.length);
-
-    const freqData = new Float32Array(analyser.frequencyBinCount);
-    analyser.getFloatFrequencyData(freqData);
-    let maxDb = -Infinity;
-    let maxIdx = -1;
-    for (let i = 1; i < freqData.length; i++) {
-      if (freqData[i] > maxDb) {
-        maxDb = freqData[i];
-        maxIdx = i;
-      }
-    }
-    const sampleRate = (analyser.context as AudioContext).sampleRate;
-    const peakFreq = maxIdx >= 0 ? (maxIdx * sampleRate) / analyser.fftSize : null;
-    return { rms, peakFreq };
+const analyserApi = buildAnalysisApi(() => engine.__audioDebugAnalyser());
+let lastWavBase64 = '';
+const debugApi = {
+  ...analyserApi,
+  /** Renders a full-throttle rpm sweep for `kind` offline; call getWavChunk() to fetch it. */
+  async renderSweep(kind: CarAudioState['engine'], seconds = 4): Promise<{ length: number }> {
+    lastWavBase64 = await renderPresetSweep(kind, seconds);
+    return { length: lastWavBase64.length };
   },
+  /** Fetches a slice of the last renderSweep() result — call twice to pull it in two chunks. */
+  getWavChunk(start: number, end: number): string {
+    return lastWavBase64.slice(start, end);
+  },
+  /** Renders and POSTs the WAV to the local receive-server.mjs sink (see tools/audiopreview). */
+  saveSweep: (kind: CarAudioState['engine'], seconds = 4): Promise<string> =>
+    saveSweepToLocalServer(kind, seconds),
 };
-(window as unknown as { __audioDebug: typeof analyserApi }).__audioDebug = analyserApi;
+(window as unknown as { __audioDebug: typeof debugApi }).__audioDebug = debugApi;
 
 const log = document.getElementById('log') as HTMLDivElement;
 function logLine(msg: string): void {
@@ -114,11 +106,14 @@ function loop(): void {
   lastT = now;
   const state = currentCar(dt);
   engine.updateCars([state], dt);
-  (window as unknown as { __audioDebug: { lastState?: CarAudioState } }).__audioDebug.lastState = state;
+  (window as unknown as { __audioDebug: { lastState?: CarAudioState } }).__audioDebug.lastState =
+    state;
   if (scrapeHeld) engine.playWallScrape(0.6);
-  requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+// setInterval rather than requestAnimationFrame: this preview page must keep
+// driving the engine even in a backgrounded/automated-test tab, where rAF is
+// throttled or fully paused by the browser.
+setInterval(loop, 1000 / 60);
 
 document.getElementById('start')!.addEventListener('click', async () => {
   await engine.resume();
@@ -189,5 +184,9 @@ document.getElementById('raceActive')!.addEventListener('click', (e) => {
 
 document.getElementById('sample')!.addEventListener('click', () => {
   const s = analyserApi.sample();
-  logLine(s ? `rms=${s.rms.toFixed(4)} peakFreq=${s.peakFreq?.toFixed(1)}Hz` : 'no analyser (unsupported mock?)');
+  logLine(
+    s
+      ? `rms=${s.rms.toFixed(4)} peakFreq=${s.peakFreq?.toFixed(1)}Hz`
+      : 'no analyser (unsupported mock?)',
+  );
 });

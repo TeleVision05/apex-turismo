@@ -1,5 +1,5 @@
 import { el, clear } from '../dom';
-import { makeButton } from '../widgets';
+import { makeButton, makeScreenHeader } from '../widgets';
 import { ACTION_LABELS, KEYBOARD, MAPPABLE_ACTIONS } from '../../core/InputBindings';
 import { InputManager } from '../../core/Input';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
@@ -30,7 +30,7 @@ class ControlsScreen implements Screen {
     this.el = el('div', 'screen screen-controls');
     const panel = el('div', 'side-panel panel');
     panel.style.width = 'min(56vw, 700px)';
-    panel.append(el('div', 'section-label', 'Controls'), this.body);
+    panel.append(makeScreenHeader('gamepad', 'Controls'), this.body);
     this.el.appendChild(panel);
     this.overlay.append(
       this.overlayText,

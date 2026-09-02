@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtCredits } from '../format';
-import { makeCard } from '../widgets';
+import { makeCard, makeScreenHeader } from '../widgets';
 import { eventById } from '../../data/events';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -17,7 +17,7 @@ class EventsScreen implements Screen {
     this.el = el('div', 'screen screen-events');
     const panel = el('div', 'side-panel panel');
     panel.style.width = 'min(56vw, 680px)';
-    panel.append(el('div', 'section-label', 'World Circuits'), this.notice, this.list);
+    panel.append(makeScreenHeader('world', 'World Circuits'), this.notice, this.list);
     this.el.appendChild(panel);
   }
 

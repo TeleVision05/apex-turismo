@@ -64,7 +64,7 @@ def _corner_arc(cy, cz, r, theta0, theta1, n=6):
 
 
 def rounded_trapezoid_section(bottom_w, top_w, zf, zt, rb, rt, crown=0.0,
-                               edge_mid=True, n_per_corner=6):
+                               edge_mid=True, n_per_corner=9):
     """One closed loop of 2D (y, z) points: a rounded rectangle (or, when
     bottom_w != top_w, a rounded-top trapezoid - the greenhouse tumblehome).
     Order: bottom-right corner -> [right mid] -> top-right -> [top mid,

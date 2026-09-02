@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtHp, fmtPP } from '../format';
-import { makeButton, makeCard, makeSwatch } from '../widgets';
+import { makeButton, makeCard, makeScreenHeader, makeSwatch } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { CarSpec, CarTuning } from '../../core/types';
@@ -39,7 +39,7 @@ class DealershipScreen implements Screen {
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-dealership');
     const panel = el('div', 'side-panel panel');
-    panel.appendChild(el('div', 'section-label', 'Brand Central'));
+    panel.appendChild(makeScreenHeader('tag', 'Brand Central'));
     panel.append(this.list, this.detail);
     this.el.appendChild(panel);
   }

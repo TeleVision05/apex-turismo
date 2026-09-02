@@ -126,7 +126,7 @@ CAR_SPECS = {
         "shoulder_height_ratio": 0.42, "belt_height_ratio": 0.60,
         "front_overhang_ratio": 0.30,
         "headlight_style": "slit",
-        "mid_engine": True,
+        "mid_engine": True, "taillight_style": "bar",
     },
     "aurelia_gt3": {
         "name": "Aurelia GT3",
@@ -183,7 +183,21 @@ def get_spec(car_id):
     spec.setdefault("closed_cockpit", False)
     spec.setdefault("fin", False)
     spec.setdefault("fender_bulges", False)
+    default_tail = "quad_round" if spec["headlight_style"] == "quad_round" else "wedge"
+    spec.setdefault("taillight_style", default_tail)
+    spec.setdefault("wheel_spokes", WHEEL_SPOKES.get(car_id, 7))
     return spec
+
+
+# Per-car spoke count/style: a real rim design cue rather than one generic
+# 7-spoke wheel on every car - thin multi-spoke (Rays-style) on the JDM
+# cars, a 5-spoke Y on the BMW, a simple 5-spoke on the muscle car, deep
+# multi-spoke centrelock look on the GT3/LMP racers.
+WHEEL_SPOKES = {
+    "sakura_86": 6, "hakone_type_r": 5, "kaizen_rx7": 5, "shinsei_gtr": 10,
+    "bavaria_m4": 10, "stallion_gt": 5, "vantage_sf": 5,
+    "aurelia_gt3": 12, "lyon_lmp": 5,
+}
 
 
 # --- deterministic body-loft profile keypoints (see body.py) -------------
@@ -252,6 +266,17 @@ def get_profile(spec):
         (0.0, hw * 0.72), (0.10, hw * 0.90), (0.18, hw), (0.50, hw),
         (0.92, hw), (1.0, hw * 0.78),
     ]
+    if spec.get("fender_bulges"):
+        front_overhang = (L - spec["wheelbase"]) * spec["front_overhang_ratio"]
+        rear_overhang = (L - spec["wheelbase"]) - front_overhang
+        xf = front_overhang / L
+        xr = (L - rear_overhang) / L
+        bulge = 0.035
+        for xc in (xf, xr):
+            w.append((max(0.02, xc - 0.05), hw))
+            w.append((xc, hw + bulge))
+            w.append((min(0.98, xc + 0.05), hw))
+        w.sort()
     zf = [
         (0.0, gc + 0.13), (frac03, gc), (1 - frac03, gc), (1.0, gc + 0.13),
     ]

@@ -67,12 +67,22 @@ function applyRaceActive(core: AudioCore, active: boolean): void {
   ramp(core.raceLoopGain.gain, active ? 1 : 0, core.ctx, RACE_MUTE_RAMP_S);
 }
 
+/** engine bus lowpass: 3.5kHz closed throttle, opening only slightly to 4.5kHz at full throttle */
+const ENGINE_LOWPASS_MIN_HZ = 3500;
+const ENGINE_LOWPASS_MAX_HZ = 4500;
+
 function updateCars(rt: Runtime, cars: CarAudioState[], dt: number): void {
   if (!rt.core || !rt.pool) return;
   rt.pool.update(cars, dt);
   const player = cars.find((c) => c.isPlayer);
-  if (player) rt.windFx?.update(player.speed);
-  else rt.windFx?.idle();
+  if (player) {
+    rt.windFx?.update(player.speed);
+    const cutoff =
+      ENGINE_LOWPASS_MIN_HZ + player.throttle * (ENGINE_LOWPASS_MAX_HZ - ENGINE_LOWPASS_MIN_HZ);
+    ramp(rt.core.engineLowpass.frequency, cutoff, rt.core.ctx, 0.15);
+  } else {
+    rt.windFx?.idle();
+  }
 }
 
 /**

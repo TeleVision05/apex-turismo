@@ -56,6 +56,9 @@ def _cylinder_obj(name, radius, length, loc, mat, axis='Y', segments=16, rot=(0,
         if axis == 'Y':
             ring_a.append(bm.verts.new((radius * c, -half, radius * s)))
             ring_b.append(bm.verts.new((radius * c, half, radius * s)))
+        elif axis == 'Z':
+            ring_a.append(bm.verts.new((radius * c, radius * s, -half)))
+            ring_b.append(bm.verts.new((radius * c, radius * s, half)))
         else:  # 'X'
             ring_a.append(bm.verts.new((-half, radius * c, radius * s)))
             ring_b.append(bm.verts.new((half, radius * c, radius * s)))
@@ -63,8 +66,12 @@ def _cylinder_obj(name, radius, length, loc, mat, axis='Y', segments=16, rot=(0,
         v1, v2 = ring_a[i], ring_a[(i + 1) % n]
         v3, v4 = ring_b[(i + 1) % n], ring_b[i]
         bm.faces.new((v1, v2, v3, v4))
-    centre_a = bm.verts.new((0, -half, 0) if axis == 'Y' else (-half, 0, 0))
-    centre_b = bm.verts.new((0, half, 0) if axis == 'Y' else (half, 0, 0))
+    if axis == 'Y':
+        centre_a, centre_b = bm.verts.new((0, -half, 0)), bm.verts.new((0, half, 0))
+    elif axis == 'Z':
+        centre_a, centre_b = bm.verts.new((0, 0, -half)), bm.verts.new((0, 0, half))
+    else:
+        centre_a, centre_b = bm.verts.new((-half, 0, 0)), bm.verts.new((half, 0, 0))
     for i in range(n):
         bm.faces.new((ring_a[(i + 1) % n], ring_a[i], centre_a))
         bm.faces.new((ring_b[i], ring_b[(i + 1) % n], centre_b))
@@ -88,42 +95,98 @@ LIGHT_SIZE = {
 }
 
 
-def _light_pair(style, y, z, half_w, depth, mat, name_prefix):
-    """Front or rear light cluster, mirrored L/R. Returns list of objects."""
-    objs = []
-    for side, sx in (("L", -1), ("R", 1)):
-        cx = sx * half_w
-        if style == "quad_round":
-            r = 0.07  # 0.14 m discs, two per side
-            for i, oz in enumerate((z - r * 1.1, z + r * 1.1)):
-                objs.append(_cylinder_obj(f"{name_prefix}_{side}_{i}", r,
-                                           depth, (cx, y, oz), mat, axis='Y'))
-        else:
-            w, d, h = LIGHT_SIZE.get(style, LIGHT_SIZE["wedge"])
-            objs.append(_box_obj(f"{name_prefix}_{side}", (w, depth, h),
-                                  (cx, y, z), mat))
-    return objs
+def _compound_round_light(name, cx, y, z, r, materials, lens_mat, chrome=True):
+    """Dark reflector cavity (Trim) behind a thin chrome bezel ring behind a
+    bright lens disc (lens_mat), stepped in Y so it reads as a real housing
+    instead of a flat emissive disc. y is the outer body surface Y. Returns
+    (trim_parts, chrome_parts, lens_parts) - callers must route each list
+    to its own contract object; a Headlights/Taillights object may only
+    carry the `lens_mat` material, so the reflector/bezel geometry has to
+    live on Trim/Chrome instead."""
+    trim = [_cylinder_obj(f"{name}_reflector", r * 0.95, 0.03,
+                           (cx, y - 0.034, z), materials["Trim"], axis='Y')]
+    chrome_parts = []
+    if chrome:
+        chrome_parts.append(_cylinder_obj(f"{name}_bezel", r * 0.90, 0.012,
+                                           (cx, y - 0.018, z), materials["Chrome"], axis='Y'))
+    lens = [_cylinder_obj(f"{name}_lens", r * 0.74, 0.014,
+                           (cx, y - 0.008, z), materials[lens_mat], axis='Y')]
+    return trim, chrome_parts, lens
+
+
+def _compound_box_light(name, cx, y, z, size, materials, lens_mat, chrome=True):
+    w, d, h = size
+    trim = [_box_obj(f"{name}_reflector", (w, 0.03, h), (cx, y - 0.032, z), materials["Trim"])]
+    chrome_parts = []
+    if chrome:
+        chrome_parts.append(_box_obj(f"{name}_bezel", (w * 1.12, 0.012, h * 1.12),
+                                      (cx, y - 0.017, z), materials["Chrome"]))
+    lens = [_box_obj(f"{name}_lens", (w * 0.82, 0.012, h * 0.82),
+                      (cx, y - 0.007, z), materials[lens_mat])]
+    return trim, chrome_parts, lens
 
 
 def build_headlights(spec, curves, bounds, materials):
-    """Inset 1cm into the nose surface, centred at 0.55 of the nose
-    (bumper-top) height."""
+    """Inset into the nose surface, centred at 0.55 of the nose (bumper-top)
+    height. Each unit is a layered reflector/bezel/lens stack, not a flat
+    emissive slab, so it reads as a real light housing up close. Returns
+    (trim_parts, chrome_parts, lens_parts) - see _compound_*_light."""
     nose_x = 0.02 * curves["L"]
     y = body.blender_y(nose_x, bounds) - 0.01
     half_w, _ = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.80
     z = curves["zt"](0.0) * 0.55
-    return _light_pair(spec["headlight_style"], y, z, hw, 0.04,
-                        materials["Headlight"], "Headlight")
+    style = spec["headlight_style"]
+    trim, chrome_parts, lens = [], [], []
+    for side, sx in (("L", -1), ("R", 1)):
+        cx = sx * hw
+        if style == "quad_round":
+            r = 0.07
+            for i, oz in enumerate((z - r * 1.1, z + r * 1.1)):
+                t, c, l = _compound_round_light(f"Headlight_{side}_{i}", cx, y, oz, r,
+                                                 materials, "Headlight")
+                trim += t; chrome_parts += c; lens += l
+        else:
+            size = LIGHT_SIZE.get(style, LIGHT_SIZE["wedge"])
+            t, c, l = _compound_box_light(f"Headlight_{side}", cx, y, z, size,
+                                           materials, "Headlight")
+            trim += t; chrome_parts += c; lens += l
+    return trim, chrome_parts, lens
 
 
 def build_taillights(spec, curves, bounds, materials):
-    style = spec["headlight_style"] if spec["headlight_style"] == "quad_round" else "wedge"
+    """Returns (trim_parts, lens_parts) - the "bar" backing and the reflector
+    cavity behind quad-round/box lenses are Trim; only the lens is
+    Taillight-material (chrome bezels are skipped on tail units)."""
+    style = spec.get("taillight_style", "wedge")
     y = bounds["y_rear_bump"] + 0.08
     half_w, top = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.90
     z = top * 0.62
-    return _light_pair(style, y - 0.05, z, hw, 0.05, materials["Taillight"], "Taillight")
+    trim, lens = [], []
+    if style == "bar":
+        # a full-width light bar (SF90-style): dark backing spanning most of
+        # the tail, a slim bright strip proud of it.
+        span = half_w * 1.7
+        trim.append(_box_obj("Taillight_bar_backing", (span, 0.03, 0.05),
+                              (0, y - 0.03, z), materials["Trim"]))
+        lens.append(_box_obj("Taillight_bar_lens", (span * 0.94, 0.012, 0.022),
+                              (0, y - 0.012, z), materials["Taillight"]))
+        return trim, lens
+    for side, sx in (("L", -1), ("R", 1)):
+        cx = sx * hw
+        if style == "quad_round":
+            r = 0.07
+            for i, oz in enumerate((z - r * 1.1, z + r * 1.1)):
+                t, _c, l = _compound_round_light(f"Taillight_{side}_{i}", cx, y - 0.05, oz, r,
+                                                  materials, "Taillight", chrome=False)
+                trim += t; lens += l
+        else:
+            w, d, h = LIGHT_SIZE.get(style, LIGHT_SIZE["wedge"])
+            t, _c, l = _compound_box_light(f"Taillight_{side}", cx, y - 0.05, z, (w, d, h),
+                                            materials, "Taillight", chrome=False)
+            trim += t; lens += l
+    return trim, lens
 
 
 def build_brakelights(spec, curves, bounds, materials):
@@ -139,6 +202,8 @@ def build_brakelights(spec, curves, bounds, materials):
 
 
 def build_mirrors(spec, curves, bounds, materials):
+    """Stalk + housing (Trim) with a flat Chrome mirror face on the
+    inboard-facing side, so it doesn't read as a solid black block."""
     if spec.get("mirror_style", "door") == "none":
         return []
     y = body.blender_y(curves["xa"], bounds) - 0.18
@@ -148,18 +213,63 @@ def build_mirrors(spec, curves, bounds, materials):
     for side, sx in (("L", -1), ("R", 1)):
         objs.append(_box_obj(f"Mirror_{side}_stalk", (0.05, 0.05, 0.03),
                               (sx * (belt_x + 0.05), y, belt_z + 0.06), materials["Trim"]))
+        housing_x = sx * (belt_x + 0.13)
         objs.append(_box_obj(f"Mirror_{side}_housing", (0.14, 0.09, 0.06),
-                              (sx * (belt_x + 0.13), y, belt_z + 0.07), materials["Trim"]))
+                              (housing_x, y, belt_z + 0.07), materials["Trim"]))
+        objs.append(_box_obj(f"Mirror_{side}_face", (0.11, 0.01, 0.05),
+                              (housing_x - sx * 0.02, y - 0.048, belt_z + 0.07),
+                              materials["Chrome"]))
+    return objs
+
+
+GRILLE_BAR_COUNT = {"tall": 7, "wide": 5}
+
+
+def _mesh_grille_bars(name_prefix, hw, hh, y, z, materials, vertical=False, bar_count=9):
+    """A fine grid of thin bars across a recessed opening - a canvas-free
+    way to fake a mesh/slat grille texture."""
+    objs = []
+    if vertical:
+        for i in range(bar_count):
+            t = (i + 0.5) / bar_count - 0.5
+            objs.append(_box_obj(f"{name_prefix}_bar_{i}", (0.012, 0.03, hh * 1.9),
+                                  (t * hw * 1.9, y, z), materials["Trim"]))
+    else:
+        for i in range(bar_count):
+            t = (i + 0.5) / bar_count - 0.5
+            objs.append(_box_obj(f"{name_prefix}_bar_{i}", (hw * 1.9, 0.03, 0.012),
+                                  (0, y, z + t * hh * 1.9), materials["Trim"]))
     return objs
 
 
 def build_grille(spec, curves, bounds, materials):
-    """40% of the car's width x 0.12 m, sat between the headlights."""
+    """A recessed cavity (dark Trim backing set 3cm behind the nose surface)
+    with a fine grid of thin bars in front of it, so it reads as a real mesh
+    grille instead of a flat painted panel. `tall_grille` cars (a big
+    upright kidney-style grille) get two narrower vertical-bar grilles side
+    by side instead of one wide one."""
     nose_x = 0.02 * curves["L"]
     y = body.blender_y(nose_x, bounds) - 0.005
-    hw = spec["width"] * 0.20
     z = curves["zt"](0.0) * 0.55
-    return [_box_obj("Grille", (hw * 2, 0.02, 0.12), (0, y, z), materials["Trim"])]
+    objs = []
+    if spec.get("tall_grille"):
+        hh = curves["zt"](0.0) * 0.34
+        for sx in (-1, 1):
+            cx = sx * spec["width"] * 0.115
+            hw = spec["width"] * 0.09
+            objs.append(_box_obj(f"GrilleBacking_{sx}", (hw * 2, 0.02, hh * 2),
+                                  (cx, y - 0.03, z + hh * 0.1), materials["Trim"]))
+            objs.extend(_mesh_grille_bars(f"Grille_{sx}", hw, hh, y - 0.01,
+                                           z + hh * 0.1, materials, vertical=True,
+                                           bar_count=5))
+    else:
+        hw = spec["width"] * 0.20
+        hh = 0.06
+        objs.append(_box_obj("GrilleBacking", (hw * 2, 0.02, hh * 2),
+                              (0, y - 0.03, z), materials["Trim"]))
+        objs.extend(_mesh_grille_bars("Grille", hw, hh, y - 0.01, z, materials,
+                                       vertical=False, bar_count=7))
+    return objs
 
 
 def _swept_strip(name, curves, bounds, x_samples, half_w_scale, z_fn,
@@ -208,6 +318,138 @@ def build_bumper_lips(spec, curves, bounds, materials):
     rear = _swept_strip("BumperLip_R", curves, bounds, rear_x, 0.86, z_f,
                          0.03, materials["Trim"])
     return [front, rear]
+
+
+def build_front_bumper_detail(spec, curves, bounds, materials):
+    """A separate lower-bumper intake (recessed dark opening) plus two fog
+    -lamp recesses either side of it, sat just above the splitter/lip.
+    Returns (trim_parts, chrome_parts, headlight_lens_parts)."""
+    nose_x = 0.015 * curves["L"]
+    y = body.blender_y(nose_x, bounds) - 0.01
+    z = curves["zf"](0.0) + 0.10
+    hw = spec["width"] * 0.16
+    hh = 0.055
+    trim = [_box_obj("LowerIntake_backing", (hw * 2, 0.02, hh * 2),
+                      (0, y - 0.035, z), materials["Trim"])]
+    trim.extend(_mesh_grille_bars("LowerIntake", hw, hh, y - 0.015, z,
+                                   materials, vertical=False, bar_count=4))
+    chrome_parts, lens = [], []
+    for sx in (-1, 1):
+        fog_x = sx * spec["width"] * 0.32
+        t, c, l = _compound_round_light("FogLamp", fog_x, y, z, 0.035,
+                                         materials, "Headlight", chrome=True)
+        trim += t; chrome_parts += c; lens += l
+    return trim, chrome_parts, lens
+
+
+def build_license_plate(spec, curves, bounds, materials):
+    """A shallow dark recess with a light plate inset, rear only (road
+    cars) - race/prototype cars run without a plate. Returns
+    (trim_parts, chrome_parts)."""
+    if spec["body_style"] in ("gt_race", "prototype"):
+        return [], []
+    y = bounds["y_rear_bump"] + 0.10
+    top = curves["zt"](curves["L"] - 0.02)
+    z = top * 0.30
+    trim = [_box_obj("PlateRecess", (0.24, 0.015, 0.13), (0, y - 0.02, z), materials["Trim"])]
+    chrome_parts = [_box_obj("Plate", (0.20, 0.006, 0.10), (0, y - 0.01, z), materials["Chrome"])]
+    return trim, chrome_parts
+
+
+def build_door_details(spec, curves, bounds, materials):
+    """Thin inset seam lines standing in for boolean-cut shut-line grooves
+    (a body-surface boolean was judged too failure-prone across 9 very
+    different silhouettes for this pass - see README deviations), plus a
+    door-handle blister per side."""
+    objs = []
+    belt_z = body.belt_z_of(spec)
+    half_w, _ = body.size_at_y(curves, bounds, body.blender_y(curves["xa"], bounds))
+    # door shut line at the B-pillar
+    y_b = body.blender_y(curves["xb"], bounds)
+    for sx in (-1, 1):
+        objs.append(_box_obj(f"DoorSeam_{sx}", (0.006, 0.02, belt_z * 0.75),
+                              (sx * half_w * 0.99, y_b, belt_z * 0.5), materials["Trim"]))
+        handle_y = y_b + 0.35
+        objs.append(_box_obj(f"DoorHandle_{sx}", (0.02, 0.11, 0.035),
+                              (sx * half_w * 1.0, handle_y, belt_z * 0.62), materials["Trim"]))
+    # hood shut line (cowl) and trunk/deck shut line
+    hood_y = body.blender_y(curves["xa"] - 0.04, bounds)
+    hood_hw, hood_z = body.size_at_y(curves, bounds, hood_y)
+    objs.append(_box_obj("HoodSeam", (hood_hw * 1.7, 0.008, 0.015),
+                          (0, hood_y, hood_z - 0.01), materials["Trim"]))
+    if spec["body_style"] not in ("wedge", "gt_race", "prototype"):
+        trunk_y = body.blender_y(curves["xc"] + 0.03, bounds)
+        trunk_hw, trunk_z = body.size_at_y(curves, bounds, trunk_y)
+        objs.append(_box_obj("TrunkSeam", (trunk_hw * 1.5, 0.008, 0.015),
+                              (0, trunk_y, trunk_z - 0.01), materials["Trim"]))
+    return objs
+
+
+def build_antenna(spec, curves, bounds, materials):
+    """A short whip antenna at the base of the rear screen - skipped for
+    open-cockpit/closed-canopy prototypes, which get their own dorsal fin."""
+    if spec["body_style"] == "prototype":
+        return []
+    y = body.blender_y(curves["xc"], bounds) - 0.06
+    hw, z = body.size_at_y(curves, bounds, y)
+    return [_cylinder_obj("Antenna", 0.006, 0.14, (hw * 0.55, y, z + 0.07),
+                           materials["Trim"], axis='Z', segments=8)]
+
+
+def build_side_scoops(spec, curves, bounds, materials):
+    """Mid-engine intake scallop ahead of the rear wheel."""
+    if not spec.get("mid_engine"):
+        return []
+    objs = []
+    y = bounds["y_rear_axle"] + 0.35
+    hw, top = body.size_at_y(curves, bounds, y)
+    z = top * 0.55
+    for sx in (-1, 1):
+        objs.append(_box_obj(f"SideScoop_{sx}", (0.015, 0.30, 0.14),
+                              (sx * hw * 1.0, y, z), materials["Trim"]))
+        for i in range(4):
+            objs.append(_box_obj(f"SideScoop_{sx}_slat_{i}", (0.03, 0.02, 0.11),
+                                  (sx * (hw * 1.0 + 0.02), y - 0.10 + i * 0.06, z),
+                                  materials["Trim"]))
+    return objs
+
+
+def build_rear_vents(spec, curves, bounds, materials):
+    """Rear-engine deck louvers (a la 911) over the engine bay."""
+    if not spec.get("rear_engine"):
+        return []
+    y0 = body.blender_y(curves["xc"], bounds)
+    hw, top = body.size_at_y(curves, bounds, y0)
+    objs = []
+    for i in range(6):
+        yy = y0 - 0.05 - i * 0.035
+        objs.append(_box_obj(f"RearVent_{i}", (hw * 1.3, 0.012, 0.01),
+                              (0, yy, top - 0.02), materials["Trim"]))
+    return objs
+
+
+def build_fin(spec, curves, bounds, materials):
+    """A dorsal stabiliser fin along the roof->tail centreline (LMP)."""
+    if not spec.get("fin"):
+        return []
+    y0 = body.blender_y(curves["xc"] - 0.10, bounds)
+    y1 = bounds["y_rear_bump"] + 0.10
+    z0 = curves["H"]
+    z1 = curves["zt"](curves["L"] - 0.10) + 0.03
+    bm = bmesh.new()
+    v = [
+        bm.verts.new((-0.006, y0, z0)), bm.verts.new((0.006, y0, z0)),
+        bm.verts.new((-0.006, y1, z1)), bm.verts.new((0.006, y1, z1)),
+        bm.verts.new((-0.006, y1, z1 + 0.02)), bm.verts.new((0.006, y1, z1 + 0.02)),
+    ]
+    bm.faces.new((v[0], v[1], v[3], v[2]))
+    bm.faces.new((v[2], v[3], v[5], v[4]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    obj = _new_object("Fin")
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.materials.append(materials["Trim"])
+    return [obj]
 
 
 def build_splitter_diffuser(spec, curves, bounds, materials):
@@ -267,6 +509,37 @@ def build_wing(spec, curves, bounds, materials):
     return body_parts, trim
 
 
+def _exhaust_tip(name, radius, loc, materials, segments=16):
+    """A genuinely hollow tip: an open chrome tube (no end caps) with a
+    dark inner tube recessed a few cm behind the opening, instead of a
+    solid chrome rod."""
+    length = 0.10
+    half = length / 2
+    bm = bmesh.new()
+    ring_a, ring_b = [], []
+    for i in range(segments):
+        a = 2 * math.pi * i / segments
+        c, s = math.cos(a), math.sin(a)
+        ring_a.append(bm.verts.new((radius * c, -half, radius * s)))
+        ring_b.append(bm.verts.new((radius * c, half, radius * s)))
+    for i in range(segments):
+        v1, v2 = ring_a[i], ring_a[(i + 1) % segments]
+        v3, v4 = ring_b[(i + 1) % segments], ring_b[i]
+        bm.faces.new((v1, v2, v3, v4))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    outer = _new_object(f"{name}_tip")
+    bm.to_mesh(outer.data)
+    bm.free()
+    outer.data.materials.append(materials["Chrome"])
+    outer.location = loc
+    for p in outer.data.polygons:
+        p.use_smooth = True
+    x, y, z = loc
+    inner = _cylinder_obj(f"{name}_bore", radius * 0.76, length * 0.5,
+                           (x, y + 0.012, z), materials["Trim"], axis='Y')
+    return [outer, inner]
+
+
 def build_exhaust(spec, curves, bounds, materials):
     count = max(1, spec.get("exhaust_count", 1))
     hw = spec["width"] / 2 * 0.55
@@ -279,8 +552,7 @@ def build_exhaust(spec, curves, bounds, materials):
     objs = []
     for i in range(count):
         x = 0.0 if count == 1 else (i - (count - 1) / 2) * (hw * 1.4 / max(1, count - 1))
-        objs.append(_cylinder_obj(f"Exhaust_{i}", 0.045, 0.10, (x, y, z),
-                                   materials["Chrome"], axis='Y'))
+        objs.extend(_exhaust_tip(f"Exhaust_{i}", 0.045, (x, y, z), materials))
     return objs
 
 
@@ -293,6 +565,42 @@ def build_badge(spec, curves, bounds, materials):
                            curves["zt"](curves["L"] - 0.02) * 0.96), materials["Chrome"], axis='Y')]
 
 
+def _roll_cage(y_cowl, y_trunk, hw, floor_z, roof_z, mat):
+    """A simplified tube cage: two A-pillar bars, a windscreen header bar,
+    a main hoop (uprights + roof bar) at the B-pillar, and two rear braces
+    down to the rear floor - read as a real cage, not a decorative box."""
+    objs = []
+    r = 0.014
+    top_z = roof_z - 0.05
+    # A-pillar bars (front footwell -> windscreen header, both sides)
+    for sx in (-1, 1):
+        x = sx * hw * 0.55
+        length = math.hypot(top_z - floor_z, 0.55)
+        angle = math.atan2(0.55, top_z - floor_z)
+        objs.append(_cylinder_obj(f"Cage_Apillar_{sx}", r, length,
+                                   (x, y_cowl + 0.20, (floor_z + top_z) / 2),
+                                   mat, axis='Z', segments=8, rot=(angle, 0, 0)))
+    objs.append(_cylinder_obj("Cage_header", r, hw * 1.1,
+                               (0, y_cowl + 0.35, top_z), mat, axis='X', segments=8))
+    # main hoop at the B-pillar
+    hoop_y = (y_cowl + y_trunk) / 2
+    for sx in (-1, 1):
+        objs.append(_cylinder_obj(f"Cage_hoop_{sx}", r, top_z - floor_z,
+                                   (sx * hw * 0.60, hoop_y, (floor_z + top_z) / 2),
+                                   mat, axis='Z', segments=8))
+    objs.append(_cylinder_obj("Cage_roofbar", r, hw * 1.2,
+                               (0, hoop_y, top_z), mat, axis='X', segments=8))
+    # rear braces down to the rear floor
+    for sx in (-1, 1):
+        rear_y = hoop_y + 0.45
+        length = math.hypot(top_z - floor_z, 0.45)
+        angle = math.atan2(0.45, top_z - floor_z)
+        objs.append(_cylinder_obj(f"Cage_brace_{sx}", r, length,
+                                   (sx * hw * 0.60, hoop_y + 0.22, (floor_z + top_z) / 2),
+                                   mat, axis='Z', segments=8, rot=(-angle, 0, 0)))
+    return objs
+
+
 def build_interior(spec, curves, bounds, materials):
     mat = materials["Interior"]
     y_cowl = body.blender_y(curves["xa"], bounds)
@@ -302,8 +610,14 @@ def build_interior(spec, curves, bounds, materials):
     objs = [
         _box_obj("CabinFloor", (hw * 1.8, y_trunk - y_cowl, 0.02),
                   (0, (y_cowl + y_trunk) / 2, floor_z), mat),
-        _box_obj("Dashboard", (hw * 1.7, 0.18, 0.22),
-                  (0, y_cowl + 0.20, spec["height"] * 0.42), mat),
+        # dashboard body + a raised instrument-cowl hood over the binnacle
+        # + a centre console running back from it
+        _box_obj("Dashboard", (hw * 1.7, 0.18, 0.20),
+                  (0, y_cowl + 0.20, spec["height"] * 0.40), mat),
+        _box_obj("Dashboard_cowl", (hw * 0.55, 0.14, 0.09),
+                  (-hw * 0.35, y_cowl + 0.14, spec["height"] * 0.40 + 0.13), mat),
+        _box_obj("CentreConsole", (0.16, (y_trunk - y_cowl) * 0.45, 0.14),
+                  (0.0, y_cowl + 0.45, floor_z + 0.09), mat),
         _box_obj("DoorCard_L", (0.04, (y_trunk - y_cowl) * 0.6, 0.28),
                   (-hw * 0.98, (y_cowl + y_trunk) / 2, spec["height"] * 0.34), mat),
         _box_obj("DoorCard_R", (0.04, (y_trunk - y_cowl) * 0.6, 0.28),
@@ -321,6 +635,22 @@ def build_interior(spec, curves, bounds, materials):
         objs.append(_box_obj(f"Seat_{side}_back", (0.42, 0.10, back_h),
                               (sx * hw * 0.42, sy - 0.20, floor_z + 0.14 + back_h / 2), mat,
                               rot=(math.radians(-8), 0, 0)))
+        objs.append(_box_obj(f"Seat_{side}_bolster_L", (0.05, 0.44, back_h * 0.5),
+                              (sx * hw * 0.42 - 0.19, sy - 0.03,
+                               floor_z + 0.14 + back_h * 0.35), mat))
+        objs.append(_box_obj(f"Seat_{side}_bolster_R", (0.05, 0.44, back_h * 0.5),
+                              (sx * hw * 0.42 + 0.19, sy - 0.03,
+                               floor_z + 0.14 + back_h * 0.35), mat))
+
+    if spec["body_style"] in ("gt_race", "prototype"):
+        objs.extend(_roll_cage(y_cowl, y_trunk, hw, floor_z, curves["H"], mat))
+    elif not spec.get("mid_engine"):
+        bench_y = y_trunk - 0.30
+        objs.append(_box_obj("RearBench_base", (hw * 1.5, 0.34, 0.09),
+                              (0, bench_y, floor_z + 0.09), mat))
+        objs.append(_box_obj("RearBench_back", (hw * 1.5, 0.09, 0.30),
+                              (0, bench_y - 0.16, floor_z + 0.09 + 0.15), mat,
+                              rot=(math.radians(-6), 0, 0)))
     return objs
 
 

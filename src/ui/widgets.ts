@@ -1,4 +1,6 @@
 import { el } from './dom';
+import { icon } from './icons';
+import type { IconName } from './icons';
 import type { FocusItem } from './Focus';
 
 export interface Widget {
@@ -10,9 +12,11 @@ export interface Widget {
 export function makeButton(
   label: string,
   onClick: () => void,
-  opts?: { className?: string; disabled?: boolean },
+  opts?: { className?: string; disabled?: boolean; icon?: IconName },
 ): Widget {
-  const btn = el('button', `gt-btn ${opts?.className ?? ''}`.trim(), label);
+  const btn = el('button', `gt-btn ${opts?.className ?? ''}`.trim());
+  if (opts?.icon) btn.appendChild(icon(opts.icon, 'gt-btn-icon'));
+  btn.appendChild(el('span', 'gt-btn-label', label));
   if (opts?.disabled) {
     btn.disabled = true;
     btn.classList.add('disabled');
@@ -21,6 +25,14 @@ export function makeButton(
     if (!btn.disabled) onClick();
   });
   return { el: btn, item: { el: btn, onConfirm: () => !btn.disabled && onClick() } };
+}
+
+/** The icon + uppercase-label row used at the top of every side/centre panel. */
+export function makeScreenHeader(iconName: IconName, text: string, className = ''): HTMLElement {
+  const header = el('div', `section-label screen-header ${className}`.trim());
+  header.appendChild(icon(iconName, 'screen-header-icon'));
+  header.appendChild(el('span', 'screen-header-text', text));
+  return header;
 }
 
 function rowShell(label: string): { row: HTMLElement; value: HTMLElement } {
@@ -141,9 +153,16 @@ export function makeSwatch(color: string, selected: boolean, onSelect: () => voi
   return { el: btn, item: { el: btn, onConfirm: onSelect } };
 }
 
-/** A large tile for the home world-map grid. */
-export function makeTile(title: string, desc: string, onSelect: () => void): Widget {
+/** A large glass tile for the home world-map grid. */
+export function makeTile(
+  iconName: IconName,
+  title: string,
+  desc: string,
+  onSelect: () => void,
+): Widget {
   const tile = el('button', 'gt-tile');
+  tile.appendChild(el('div', 'gt-tile-sweep'));
+  tile.appendChild(icon(iconName, 'gt-tile-icon'));
   tile.appendChild(el('div', 'gt-tile-title', title));
   tile.appendChild(el('div', 'gt-tile-desc', desc));
   tile.addEventListener('click', onSelect);

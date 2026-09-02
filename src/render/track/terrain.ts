@@ -1,14 +1,24 @@
 import { BufferGeometry, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { BRIDGE_HEIGHT, type Track } from '../../track/Track';
+import { wrapIndex } from '../../core/math';
 import { fbm } from './textures';
 import type { TextureSet } from './textures';
 import type { Disposables } from './types';
 
 const MARGIN_M = 500;
-const RESOLUTION_M = 10;
+/** Grid step; kept uniform since even the largest track stays well under the ~600k vertex budget at this step. */
+const RESOLUTION_M = 5;
 const HILL_AMPLITUDE = 25;
+/** How far the flat, always-below-the-road corridor floor sits beneath the nearest road sample. */
 const RUNOFF_DROP = 0.4;
-const HILL_FADE_M = 60;
+/** Metres beyond the blend start where the terrain has fully reached the rolling-hill height. */
+const HILL_BLEND_M = 40;
+/** Extra clearance (beyond track.barrierDistance) that stays flat at road height minus RUNOFF_DROP. */
+const CORRIDOR_MARGIN_M = 6;
+/** Neighbouring centreline samples (each side) considered when hunting for the true nearest road height. */
+const NEIGHBOR_WINDOW = 12;
+/** Only neighbours within this 2D distance of the query point count toward the minimum road height. */
+const NEIGHBOR_MAX_DIST_M = 30;
 
 interface Bounds {
   minX: number;
@@ -36,6 +46,39 @@ function computeBounds(track: Track): Bounds {
   };
 }
 
+/**
+ * The height of the road itself at centreline sample `j`, in the sense the terrain must stay
+ * below: for a sample on the raised, upper deck of a bridge crossing this is the height of the
+ * LOWER road passing underneath (upper deck - BRIDGE_HEIGHT), never the deck itself, so the
+ * terrain corridor always tracks the ground road and the upper deck is left to float.
+ */
+function roadHeightAt(track: Track, j: number): number {
+  const y = track.points[j].y;
+  return track.bridge[j] ? y - BRIDGE_HEIGHT : y;
+}
+
+/**
+ * Minimum road height among centreline samples within NEIGHBOR_WINDOW of `centerIndex` and
+ * within NEIGHBOR_MAX_DIST_M (2D) of (x, z). Using a window + minimum (rather than the single
+ * nearest sample) keeps the terrain from poking through the road ribbon on slopes and near
+ * corners, where linear interpolation between widely-spaced samples would otherwise cross above
+ * the road surface.
+ */
+function minRoadHeightNear(track: Track, x: number, z: number, centerIndex: number): number {
+  let min = Infinity;
+  const maxDistSq = NEIGHBOR_MAX_DIST_M * NEIGHBOR_MAX_DIST_M;
+  for (let k = -NEIGHBOR_WINDOW; k <= NEIGHBOR_WINDOW; k++) {
+    const j = wrapIndex(centerIndex + k, track.n);
+    const p = track.points[j];
+    const dx = p.x - x;
+    const dz = p.z - z;
+    if (dx * dx + dz * dz > maxDistSq) continue;
+    const y = roadHeightAt(track, j);
+    if (y < min) min = y;
+  }
+  return Number.isFinite(min) ? min : roadHeightAt(track, centerIndex);
+}
+
 /** Height + local track-relative info at an arbitrary world (x,z), via Track's own spatial hash (not O(n^2)). */
 export function terrainHeightAt(
   track: Track,
@@ -46,14 +89,16 @@ export function terrainHeightAt(
   const probe = new Vector3(x, 0, z);
   const q = track.query(probe, hint);
   probe.y = q.height;
+  // Re-query at the first-guess height: this biases the match toward the LOWER road at bridge
+  // crossovers (whose deck sits ~BRIDGE_HEIGHT above the point (x, 0, z) would otherwise land near).
   const q2 = track.query(probe, q.index);
-  let trackY = q2.height;
-  if (track.bridge[q2.index]) trackY -= BRIDGE_HEIGHT;
-  const distBeyondEdge = Math.max(0, Math.abs(q2.lateral) - track.barrierDistance(q2.index));
+  const minRoad = minRoadHeightNear(track, x, z, q2.index);
+  const corridorHalfWidth = track.barrierDistance(q2.index) + CORRIDOR_MARGIN_M;
+  const distBeyondCorridor = Math.max(0, Math.abs(q2.lateral) - corridorHalfWidth);
   const hillNoise = fbm(x / 400, z / 400, 91, 5) * 2 - 1;
-  const hillY = trackY + hillNoise * HILL_AMPLITUDE;
-  const t = smoothstep(0, HILL_FADE_M, distBeyondEdge);
-  const y = lerp(trackY - RUNOFF_DROP, hillY, t);
+  const hillY = minRoad + hillNoise * HILL_AMPLITUDE;
+  const t = smoothstep(0, HILL_BLEND_M, distBeyondCorridor);
+  const y = lerp(minRoad - RUNOFF_DROP, hillY, t);
   return { y, hint: q2.index };
 }
 

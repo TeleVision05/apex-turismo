@@ -1,5 +1,6 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
+import { makeScreenHeader } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 
@@ -8,7 +9,7 @@ export function createRecordsScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-records');
   const panel = el('div', 'side-panel panel');
   panel.style.width = 'min(56vw, 680px)';
-  panel.appendChild(el('div', 'section-label', 'Records'));
+  panel.appendChild(makeScreenHeader('trophy', 'Records'));
   const body = el('div', 'side-panel-scroll');
   panel.appendChild(body);
   root.appendChild(panel);
