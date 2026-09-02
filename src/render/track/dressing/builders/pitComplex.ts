@@ -150,6 +150,7 @@ function buildWingRoof(
   disposables.materials.push(mat);
 }
 
+/** A slender race-control tower: a narrow shaft, a glazed cabin band, and a roof cap — not a plain wide pillar. */
 function buildTower(
   spec: PitComplexSpec,
   pf: ReturnType<typeof landmarkFrame>,
@@ -157,16 +158,39 @@ function buildTower(
   group: Group,
   disposables: Disposables,
 ): void {
-  const geo = new CylinderGeometry(3.2, 3.6, spec.towerHeight, 8);
-  const mat = new MeshStandardMaterial({ color: 0xdadce0, roughness: 0.5, metalness: 0.15 });
-  const tower = new Mesh(geo, mat);
-  tower.castShadow = true;
-  tower.receiveShadow = true;
   const pos = lateralOffset(pf, sign, -WIDTH_M * 0.1);
   const along = spec.length * 0.42;
   pos.addScaledVector(pf.forward, along);
-  placeFacing(tower, pos, pf.forward, spec.towerHeight / 2, spec.rotationDeg);
-  group.add(tower);
-  disposables.geometries.push(geo);
-  disposables.materials.push(mat);
+
+  const shaftHeight = spec.towerHeight * 0.78;
+  const shaftGeo = new CylinderGeometry(1.0, 1.3, shaftHeight, 12);
+  const shaftMat = new MeshStandardMaterial({ color: 0xc7cad0, roughness: 0.6, metalness: 0.1 });
+  const shaft = new Mesh(shaftGeo, shaftMat);
+  shaft.castShadow = true;
+  shaft.receiveShadow = true;
+  placeFacing(shaft, pos, pf.forward, shaftHeight / 2, spec.rotationDeg);
+  group.add(shaft);
+
+  const cabinHeight = spec.towerHeight - shaftHeight;
+  const cabinGeo = new BoxGeometry(4.2, cabinHeight, 4.2);
+  const cabinMat = new MeshStandardMaterial({
+    color: PALETTE.glassBlue,
+    roughness: 0.2,
+    metalness: 0.3,
+    emissive: PALETTE.glassEmissive,
+  });
+  const cabin = new Mesh(cabinGeo, cabinMat);
+  cabin.castShadow = true;
+  placeFacing(cabin, pos, pf.forward, shaftHeight + cabinHeight / 2, spec.rotationDeg);
+  group.add(cabin);
+
+  const capGeo = new CylinderGeometry(2.6, 2.6, 0.25, 12);
+  const capMat = new MeshStandardMaterial({ color: 0x3a3a3f, roughness: 0.6 });
+  const cap = new Mesh(capGeo, capMat);
+  cap.castShadow = true;
+  placeFacing(cap, pos, pf.forward, spec.towerHeight + 0.15, spec.rotationDeg);
+  group.add(cap);
+
+  disposables.geometries.push(shaftGeo, cabinGeo, capGeo);
+  disposables.materials.push(shaftMat, cabinMat, capMat);
 }

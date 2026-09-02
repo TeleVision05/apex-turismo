@@ -276,6 +276,114 @@ def _cluster_wheel_corners(candidates):
     return list(groups.values())
 
 
+def _split_object_by_hub_proximity(obj, hub_targets, radius):
+    """Carve one object's faces into per-corner pieces by XY proximity to
+    each expected hub position (hub_targets: tag -> Vector(x, y)). Only
+    ever splits within a SINGLE source object, so its own material list/
+    indices stay valid - no cross-object material-index mixing. Returns a
+    dict tag -> new object for every tag that claimed at least one face;
+    the original object is deleted (its faces are now fully distributed
+    between the returned pieces and, for whatever wasn't near any hub,
+    a "_other" entry)."""
+    if not obj.data.polygons:
+        return {}
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    groups = {k: [] for k in hub_targets}
+    groups["_other"] = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        best, best_d = "_other", radius
+        for k, t in hub_targets.items():
+            d = math.hypot(c.x - t.x, c.y - t.y)
+            if d < best_d:
+                best, best_d = k, d
+        groups[best].append(f)
+
+    result = {}
+    for k, faces in groups.items():
+        if not faces:
+            continue
+        sub = bm.copy()
+        sub.faces.ensure_lookup_table()
+        keep = {f.index for f in faces}
+        remove = [f for f in sub.faces if f.index not in keep]
+        bmesh.ops.delete(sub, geom=remove, context='FACES')
+        name = f"{obj.name}_{k}"
+        mesh = bpy.data.meshes.new(name)
+        sub.to_mesh(mesh)
+        sub.free()
+        newobj = bpy.data.objects.new(name, mesh)
+        newobj.matrix_world = obj.matrix_world.copy()
+        for m in obj.data.materials:
+            newobj.data.materials.append(m)
+        bpy.context.collection.objects.link(newobj)
+        result[k] = newobj
+    bm.free()
+    bpy.data.objects.remove(obj, do_unlink=True)
+    return result
+
+
+def detect_wheels_by_expected_hubs(spec, length_estimate):
+    """Fallback for sources where a wheel/rim/caliper mesh spans all four
+    corners at once (so no single OBJECT ever looks wheel-shaped): compute
+    each corner's expected (x, y) from the roster spec, scaled down to the
+    source's own raw units by the same length ratio scale_everything()
+    will later apply, then carve every object whose footprint plausibly
+    spans more than one corner around those four points. Ordinary
+    single-corner objects (most of the source, including a Body shell
+    that happens to pass near a wheel-ish position) are left alone."""
+    scale_guess = spec["length"] / length_estimate if length_estimate > 1e-6 else 1.0
+    lat_f = (spec["track_front"] / 2.0) / scale_guess
+    lat_r = (spec["track_rear"] / 2.0) / scale_guess
+    y_f = (spec["wheelbase"] / 2.0) / scale_guess
+    y_r = -y_f
+    wheel_r_raw = spec["wheel_radius"] / scale_guess
+    hub_targets = {
+        "Wheel_FL": Vector((-lat_f, y_f)), "Wheel_FR": Vector((lat_f, y_f)),
+        "Wheel_RL": Vector((-lat_r, y_r)), "Wheel_RR": Vector((lat_r, y_r)),
+    }
+    radius = wheel_r_raw * 1.6
+    span_thresh = wheel_r_raw * 2.2  # bigger than one wheel -> likely spans corners
+
+    wheelish_kw = ("rim", "wheel", "tire", "tyre", "caliper", "brake",
+                   "disc", "rotor", "spoke", "hub")
+    all_objs = _mesh_objects()
+    corner_objs = {k: [] for k in hub_targets}
+    for o in list(all_objs):
+        dims, ctr = _dims_center(o)
+        # only touch objects whose own name/material reads as wheel-ish
+        # AND are plausibly bigger than a single wheel - never a Body
+        # shell panel (however close it happens to pass to a hub), so a
+        # wheel/rim/caliper mesh that was baked across all four corners at
+        # once is the only thing this ever carves into pieces.
+        if not _any(_text(o), wheelish_kw):
+            continue
+        if max(dims.x, dims.y) < span_thresh:
+            continue
+        pieces = _split_object_by_hub_proximity(o, hub_targets, radius)
+        for k, piece in pieces.items():
+            if k == "_other":
+                continue
+            corner_objs[k].append(piece)
+
+    corners = []
+    for k, objs in corner_objs.items():
+        if not objs:
+            continue
+        pts = [o.matrix_world @ v.co for o in objs for v in o.data.vertices]
+        hub = sum(pts, Vector((0, 0, 0))) / len(pts)
+        corners.append(dict(hub=hub, objs=objs, _tag=k))
+    # give each corner its definitive contract name straight away (this
+    # path already knows FL/FR/RL/RR from the spec, unlike the geometric
+    # detector which infers it from measured positions afterwards)
+    named = {c["_tag"]: c for c in corners}
+    claimed = {o for c in named.values() for o in c["objs"]}
+    remaining = [o for o in _mesh_objects() if o not in claimed]
+    return list(named.values()), remaining
+
+
 def detect_wheels_and_brakes(length_estimate):
     all_objs = _mesh_objects()
     candidates = []
@@ -328,6 +436,52 @@ def _assign_corner_names(corners):
     return named
 
 
+def _radial_split_tire_rim(frag, hub, threshold_frac=0.55):
+    """Split one unified wheel mesh (no separate tyre/rim material at all)
+    into an outer tyre-tread object and an inner rim object, purely by
+    each face's radial distance from the hub in the plane perpendicular
+    to the spin axis (local X). Returns (tire_obj, rim_obj); either can be
+    None if the mesh has no faces or is degenerate."""
+    if not frag.data.polygons:
+        return None, frag
+    bm = bmesh.new()
+    bm.from_mesh(frag.data)
+    bm.faces.ensure_lookup_table()
+    radii = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        radii.append(math.hypot(c.y - hub.y, c.z - hub.z))
+    if not radii or max(radii) < 1e-6:
+        bm.free()
+        return None, frag
+    thresh = max(radii) * threshold_frac
+    tire_faces = [f for f, r in zip(bm.faces, radii) if r >= thresh]
+    rim_faces = [f for f, r in zip(bm.faces, radii) if r < thresh]
+    if not tire_faces or not rim_faces:
+        bm.free()
+        return None, frag
+
+    def _mesh_from_faces(faces, name):
+        sub = bm.copy()
+        sub.faces.ensure_lookup_table()
+        keep_idx = {f.index for f in faces}
+        remove = [f for f in sub.faces if f.index not in keep_idx]
+        bmesh.ops.delete(sub, geom=remove, context='FACES')
+        mesh = bpy.data.meshes.new(name)
+        sub.to_mesh(mesh)
+        sub.free()
+        obj = bpy.data.objects.new(name, mesh)
+        bpy.context.collection.objects.link(obj)
+        obj.matrix_world = frag.matrix_world.copy()
+        return obj
+
+    tire_obj = _mesh_from_faces(tire_faces, frag.name + "_tire")
+    rim_obj = _mesh_from_faces(rim_faces, frag.name + "_rim")
+    bm.free()
+    bpy.data.objects.remove(frag, do_unlink=True)
+    return tire_obj, rim_obj
+
+
 def _build_wheel_and_brake(tag, corner, mats):
     tire_frags, rim_frags, brake_frags = [], [], []
     for o in corner["objs"]:
@@ -342,7 +496,7 @@ def _build_wheel_and_brake(tag, corner, mats):
             else:
                 rim_frags.append(frag)
 
-    if not tire_frags and rim_frags:
+    if not tire_frags and len(rim_frags) >= 2:
         # no fragment's name/material called out a tyre - contract still
         # requires both Rubber and Rim to exist, so promote whichever
         # fragment has the largest radius (the outermost shell of an
@@ -352,6 +506,17 @@ def _build_wheel_and_brake(tag, corner, mats):
             return dims.y + dims.z
         rim_frags.sort(key=_radius, reverse=True)
         tire_frags.append(rim_frags.pop(0))
+    elif not tire_frags and len(rim_frags) == 1:
+        # the whole wheel is one unified mesh with no separate tyre/rim
+        # regions at all (single flat material, e.g. ae86's Wheel1..4) -
+        # peel the tyre tread off geometrically: faces whose centre sits
+        # in the outer ~45% of the wheel's radius (measured from the hub,
+        # in the plane perpendicular to the spin axis) are the tyre,
+        # same inner_r=0.6*radius convention wheels.py's own rim uses.
+        tire_piece, rim_piece = _radial_split_tire_rim(rim_frags[0], corner["hub"])
+        if tire_piece is not None:
+            tire_frags = [tire_piece]
+            rim_frags = [rim_piece]
 
     for f in tire_frags:
         _clear_and_set_material(f, mats["Rubber"])
@@ -446,6 +611,38 @@ def _prim(kind, size, loc, name):
     return obj
 
 
+def _find_roof_span(body_frags, height):
+    """Bin the actual (already final-scale) body geometry by Y and find
+    the contiguous Y-range where it reaches near full height - the real
+    greenhouse/roof, wherever it actually sits on this source's own
+    proportions, rather than a guessed wheelbase fraction that can land
+    over the hood on a car with a long front overhang."""
+    pts = [v.co for f in body_frags for v in f.data.vertices]
+    if not pts:
+        return None
+    ys = [p.y for p in pts]
+    y_lo, y_hi = min(ys), max(ys)
+    if y_hi - y_lo < 1e-6:
+        return None
+    bins = 40
+    width = (y_hi - y_lo) / bins
+    max_z = [-1e9] * bins
+
+    def _bin(y):
+        return min(bins - 1, max(0, int((y - y_lo) / width)))
+
+    for p in pts:
+        b = _bin(p.y)
+        if p.z > max_z[b]:
+            max_z[b] = p.z
+    thresh = height * 0.82
+    roof_bins = [i for i, z in enumerate(max_z) if z > thresh]
+    if not roof_bins:
+        return None
+    lo_bin, hi_bin = min(roof_bins), max(roof_bins)
+    return (y_lo + lo_bin * width, y_lo + (hi_bin + 1) * width)
+
+
 def synthesize_missing(buckets, dims, mats):
     """dims: dict with length/width/height/wheelbase (all target-scale,
     car already centred at wheelbase midpoint with ground at Z=0)."""
@@ -453,19 +650,33 @@ def synthesize_missing(buckets, dims, mats):
     front_y, rear_y = WB / 2.0 + (L - WB) * 0.35, -WB / 2.0 - (L - WB) * 0.35
 
     if not buckets["Glass"]:
+        # deliberately conservative (smaller than a real greenhouse) - this
+        # only fires for sources with no separable window geometry at all,
+        # and an axis-aligned box proxy that undershoots the glass area
+        # reads far better than one that pokes through the roofline of a
+        # sloped fastback/notchback silhouette it has no knowledge of.
         panels = []
-        beltline, roof = H * 0.55, H * 0.94
-        specs_ = [
-            ("wind", 0.42 * WB, 0.58 * WB, 0.0),
-            ("back", -0.58 * WB, -0.30 * WB, 0.0),
-            ("left", -0.30 * WB, 0.30 * WB, -W * 0.48),
-            ("right", -0.30 * WB, 0.30 * WB, W * 0.48),
-        ]
-        for nm, y0, y1, x in specs_:
-            loc = ((x, (y0 + y1) / 2, (beltline + roof) / 2))
-            size = (0.03, abs(y1 - y0), roof - beltline) if x == 0 else (W * 0.9, abs(y1 - y0), roof - beltline)
-            o = _prim("cube", size, loc, f"glass_synth_{nm}")
-            panels.append(o)
+        beltline, roof = H * 0.60, H * 0.88
+        pane_h = roof - beltline
+        span = _find_roof_span(buckets["Body"], H)
+        if span is not None:
+            y_lo, y_hi = span
+            cabin_len = y_hi - y_lo
+            wind_y0, wind_y1 = y_lo + cabin_len * 0.60, y_hi - cabin_len * 0.04
+            back_y0, back_y1 = y_lo + cabin_len * 0.04, y_lo + cabin_len * 0.40
+            side_y0, side_y1 = y_lo + cabin_len * 0.10, y_hi - cabin_len * 0.10
+        else:
+            wind_y0, wind_y1 = 0.36 * WB, 0.52 * WB
+            back_y0, back_y1 = -0.50 * WB, -0.36 * WB
+            side_y0, side_y1 = -0.17 * WB, 0.17 * WB
+        for nm, y0, y1 in (("wind", wind_y0, wind_y1), ("back", back_y0, back_y1)):
+            loc = (0.0, (y0 + y1) / 2, (beltline + roof) / 2)
+            size = (W * 0.72, min(0.08, abs(y1 - y0)), pane_h)
+            panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
+        for nm, x in (("left", -W * 0.46), ("right", W * 0.46)):
+            loc = (x, (side_y0 + side_y1) / 2, (beltline + roof) / 2)
+            size = (0.03, abs(side_y1 - side_y0), pane_h)
+            panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
         buckets["Glass"] = panels
 
     if not buckets["Headlights"]:
@@ -593,8 +804,26 @@ def force_wheel_symmetry(wheel_objs, brake_objs, hubs):
             if o is None:
                 continue
             o.location += delta
-            o.location += delta
     return targets
+
+
+def snap_wheels_to_ground(wheel_objs, brake_objs):
+    """recentre_and_ground already grounds the CAR as a whole using the
+    single lowest wheel; a real source model's wheels are not always
+    modelled at perfectly matching heights (ae86's front/rear pair differ
+    by ~2cm even after scaling), so nudge every wheel/brake pair down
+    individually until its own tyre bottom sits at Z=0."""
+    for tag, w in wheel_objs.items():
+        if w is None or not w.data.vertices:
+            continue
+        local_min_z = min(v.co.z for v in w.data.vertices)
+        dz = -(w.location.z + local_min_z)
+        if abs(dz) < 1e-5:
+            continue
+        w.location.z += dz
+        b = brake_objs.get("Brake_" + tag.split("_")[1])
+        if b is not None:
+            b.location.z += dz
 
 
 # --- decimation to stay under the triangle budget ---------------------------
@@ -652,6 +881,16 @@ def main():
 
     corners, remaining = detect_wheels_and_brakes(length_estimate)
     if len(corners) != 4:
+        # some sources bake all four wheels/rims/calipers into one merged
+        # object (bmw_m4's rim meshes span all four corners at once) - the
+        # per-object cylindrical test can't see wheels inside a mesh like
+        # that. Fall back to exactly the spec's own suggestion: carve
+        # geometry out of a bounding-box/radius selection around each
+        # expected hub position, scaled from the roster spec.
+        print(f"per-object wheel detection found {len(corners)}/4 - "
+              f"falling back to bounding-box hub selection")
+        corners, remaining = detect_wheels_by_expected_hubs(spec, length_estimate)
+    if len(corners) != 4:
         print(f"FATAL: detected {len(corners)} wheel corners, expected 4")
         sys.exit(1)
     corners_named = _assign_corner_names(corners)
@@ -671,10 +910,56 @@ def main():
 
     hubs = recentre_and_ground(corners_named)
     hubs = force_wheel_symmetry(wheel_objs, brake_objs, hubs)
+    snap_wheels_to_ground(wheel_objs, brake_objs)
 
     dims = dict(length=spec["length"], width=spec["width"], height=spec["height"],
                 wheelbase=spec["wheelbase"])
     buckets = synthesize_missing(buckets, dims, mats)
+
+    # verify.py requires Chrome fragments within 17cm of the body surface
+    # (a much tighter budget than Trim's 45cm, reserved for exhaust tips
+    # and badges sitting flush on it) - a real source's "chrome" material
+    # occasionally covers something that runs further from the shell (an
+    # exhaust pipe routed under the floor, say); reroute anything that
+    # would fail the check to Trim instead of dropping it or blowing the
+    # budget, since Trim comfortably covers it and Chrome is optional.
+    body_pts = [v.co.copy() for f in buckets["Body"] for v in f.data.vertices]
+    if body_pts:
+        still_chrome = []
+        for f in buckets["Chrome"]:
+            frag_pts = [v.co for v in f.data.vertices][::max(1, len(f.data.vertices) // 60)]
+            max_d = 0.0
+            for p in frag_pts:
+                d = min((p - b).length for b in body_pts[::max(1, len(body_pts) // 800)])
+                max_d = max(max_d, d)
+            (still_chrome if max_d <= 0.15 else buckets["Trim"]).append(f)
+        buckets["Chrome"] = still_chrome
+
+        # same idea for Trim itself (45cm budget): a source's "black" or
+        # "carbon" material sometimes turns out to be a real structural
+        # panel modelled with a gap from the rest of the shell (a vinyl
+        # roof insert with no overlap into the base body mesh, say) -
+        # something that far from the body reads better painted as part
+        # of the body than left as a "trim" island floating off it.
+        still_trim = []
+        for f in buckets["Trim"]:
+            frag_pts = [v.co for v in f.data.vertices][::max(1, len(f.data.vertices) // 60)]
+            max_d = 0.0
+            for p in frag_pts:
+                d = min((p - b).length for b in body_pts[::max(1, len(body_pts) // 800)])
+                max_d = max(max_d, d)
+            (still_trim if max_d <= 0.35 else buckets["Body"]).append(f)
+        buckets["Trim"] = still_trim
+        if not buckets["Trim"]:
+            # every candidate got rerouted to Body - Trim is still a
+            # required contract object, so fall back to the same small
+            # synthetic placeholder synthesize_missing() would have used
+            # had the source had no trim-ish material at all.
+            L, W, H, WB = dims["length"], dims["width"], dims["height"], dims["wheelbase"]
+            front_y = WB / 2.0 + (L - WB) * 0.35
+            buckets["Trim"] = [
+                _prim("cube", (W * 0.46, 0.05, 0.02), (0.0, front_y + 0.05, 0.03), "trim_synth2"),
+            ]
 
     bucket_to_mat = {"Body": "Paint", "Glass": "Glass", "Trim": "Trim", "Chrome": "Chrome",
                       "Headlights": "Headlight", "Taillights": "Taillight",
@@ -686,8 +971,6 @@ def main():
     built = {}
     for name, frags in buckets.items():
         built[name] = _join(frags, name)
-    _recalc_normals_outward(built.get("Body"))
-    _force_centroid_outward(built.get("Body"), list(hubs.values()))
 
     if built.get("Chrome") is None:
         del built["Chrome"]  # optional per contract
@@ -696,6 +979,14 @@ def main():
         car_id, built["Body"], built["Glass"], built["Trim"], built.get("Chrome"),
         built["Headlights"], built["Taillights"], built["Brakelights"],
         built["Interior"], built["SteeringWheel"], {**wheel_objs, **brake_objs})
+
+    # Must run AFTER build_hierarchy: export_mod.add_uvs() runs its own
+    # bmesh recalc_face_normals() whenever the joined Body has no UV layer
+    # left post-join (fragments from different source objects don't
+    # always carry a mergeable one), which would silently undo a normals
+    # fix applied any earlier.
+    _recalc_normals_outward(built.get("Body"))
+    _force_centroid_outward(built.get("Body"), list(hubs.values()))
 
     tri_total = decimate_to_budget(root)
 

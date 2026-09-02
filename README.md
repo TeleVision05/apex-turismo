@@ -3,7 +3,7 @@
 A Gran Turismo-style 3D racing game that runs in the browser (Three.js + TypeScript + Vite).
 
 - Ten real circuits traced from OpenStreetMap with real elevation: Suzuka, Monza, Spa-Francorchamps, Laguna Seca, Brands Hatch, Tsukuba, Fuji, Interlagos, Red Bull Ring and Silverstone, with their real corner names.
-- Nine original cars (from an 80s coupe to a Le Mans prototype) generated procedurally in Blender.
+- Nine cars from an 80s coupe to a Le Mans prototype, built from freely licensed community models (credits in `public/models/cars/CREDITS.md`) normalised through a Blender pipeline; a fully procedural generator is kept as fallback.
 - Four times of day, clear/overcast/rain weather, replays with trackside TV cameras.
 - A rigid-body vehicle model: four spring/damper wheels, a combined-slip tyre model, weight transfer, aero, an engine torque curve with a gearbox, ABS/TCS assists.
 - AI opponents that follow an optimised racing line, overtake and recover.
