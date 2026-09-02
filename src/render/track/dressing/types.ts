@@ -154,6 +154,8 @@ export interface GravelTrapRegion extends RegionBase {
 export type Region = ForestBeltRegion | AdBoardRunRegion | FlagRowRegion | GravelTrapRegion;
 
 export interface DressingSpec {
+  /** metres the start line was moved forward after this spec was written; far-from-start entries shift back by it */
+  startRotationM?: number;
   id: string;
   landmarks: Landmark[];
   regions: Region[];

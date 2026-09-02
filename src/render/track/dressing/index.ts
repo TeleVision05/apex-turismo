@@ -33,12 +33,22 @@ export function buildDressing(track: Track, options: TrackSceneOptions): Dressin
   if (!spec) return { group, disposables };
 
   const ctx: DressingContext = { track, options };
-  for (const landmark of spec.landmarks) {
+  const rot = spec.startRotationM ?? 0;
+  const L = track.length;
+  // entries near the start line follow the pit straight; everything else stays at its real place
+  const shift = (s: number): number =>
+    Math.abs(s) <= 300 || rot === 0 ? s : (((s - rot) % L) + L) % L;
+  for (const raw of spec.landmarks) {
+    const landmark = { ...raw, s: shift(raw.s) };
     const built = buildLandmark(ctx, landmark);
     group.add(built.group);
     mergeDisposables(disposables, built.disposables);
   }
-  for (const region of spec.regions) {
+  for (const rawRegion of spec.regions) {
+    const startArea = Math.abs(rawRegion.sStart) <= 300 && Math.abs(rawRegion.sEnd) <= 300;
+    const region = startArea
+      ? rawRegion
+      : { ...rawRegion, sStart: shift(rawRegion.sStart), sEnd: shift(rawRegion.sEnd) };
     const built = buildRegion(ctx, region);
     group.add(built.group);
     mergeDisposables(disposables, built.disposables);

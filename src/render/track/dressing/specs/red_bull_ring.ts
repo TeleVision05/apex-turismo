@@ -7,6 +7,7 @@ import type { DressingSpec } from '../types';
  */
 export const spec: DressingSpec = {
   id: 'red_bull_ring',
+  startRotationM: 3980,
   landmarks: [
     {
       kind: 'pitComplex',

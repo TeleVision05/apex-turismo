@@ -79,8 +79,9 @@ export class RaceSession {
     entries: RaceEntry[],
     assists: Assists,
     transmission: Transmission,
+    line?: RacingLine,
   ) {
-    this.line = new RacingLine(track);
+    this.line = line ?? new RacingLine(track);
     const botAssists: Assists = {
       abs: true,
       tcs: 1,
