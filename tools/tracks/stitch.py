@@ -5,7 +5,11 @@ from collections import defaultdict, namedtuple
 
 from geometry import make_projector
 
-DROP_NAME_RE = re.compile(r"pit|paddock|kart|service|access|escape", re.I)
+# "pit" is excluded EXCEPT when it is part of "pit straight" / "pit lane
+# straight" -- several circuits (Silverstone's "National Pit Straight",
+# many others' plain "Pit Straight") legitimately name their front
+# straight that way; only the pit lane/road itself should be dropped.
+DROP_NAME_RE = re.compile(r"pit(?!\s*(lane\s+)?straight)|paddock|kart|service|access|escape", re.I)
 STRAIGHT_RE = re.compile(r"straight", re.I)
 START_WAY_RE = re.compile(
     r"main straight|start|finish|home straight|pit straight|start\/finish", re.I
@@ -177,28 +181,34 @@ def _dfs_search(edges, node_xy, start_node, real_length, tol, max_branch_tries=3
 
 def find_loop(ways, node_xy, edges, real_length, tol=0.15):
     """Find the closed loop matching real_length within tol. Falls back to a
-    depth-limited DFS over branch decisions if the greedy walk fails."""
+    depth-limited DFS over branch decisions if the greedy walk fails. Raises
+    if nothing found is within tolerance -- callers must not silently ship
+    a loop that doesn't match the known real lap length."""
     start_node = find_start_node(ways)
     greedy = _greedy_walk(edges, start_node)
+    best_path, best_len = None, None
     if greedy is not None:
         glen = _path_length(greedy, node_xy)
         if abs(glen - real_length) / real_length <= tol:
             return greedy, glen
-    else:
-        glen = None
+        best_path, best_len = greedy, glen
 
     candidates = _dfs_search(edges, node_xy, start_node, real_length, tol)
-    if candidates:
-        scored = [(abs(_path_length(p, node_xy) - real_length), p) for p in candidates]
-        scored.sort(key=lambda t: t[0])
-        best_diff, best_path = scored[0]
-        best_len = _path_length(best_path, node_xy)
-        if abs(best_len - real_length) / real_length <= tol or greedy is None:
-            return best_path, best_len
+    for p in candidates:
+        plen = _path_length(p, node_xy)
+        if best_len is None or abs(plen - real_length) < abs(best_len - real_length):
+            best_path, best_len = p, plen
 
-    if greedy is not None:
-        return greedy, glen
-    raise RuntimeError("Could not find a closed loop from the filtered ways")
+    if best_path is not None and abs(best_len - real_length) / real_length <= tol:
+        return best_path, best_len
+
+    if best_path is None:
+        raise RuntimeError("Could not find a closed loop from the filtered ways")
+    diff_pct = (best_len - real_length) / real_length * 100
+    raise RuntimeError(
+        f"best loop found ({best_len:.0f}m) is {diff_pct:+.1f}% off the real "
+        f"length ({real_length}m), outside the {tol*100:.0f}% tolerance"
+    )
 
 
 def extract_corners(ways, loop_node_set):

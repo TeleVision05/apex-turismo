@@ -287,10 +287,10 @@ def build_exhaust(spec, curves, bounds, materials):
 def build_badge(spec, curves, bounds, materials):
     """Sit right on the nose/tail surface height, not a generic mid-height
     guess - the nose tip is much lower than half the car's overall H."""
-    return [_cylinder_obj("Badge_F", 0.05, 0.01, (0, bounds["y_front_bump"] - 0.01,
-                           curves["zt"](0.0) * 0.85), materials["Chrome"], axis='Y'),
-            _cylinder_obj("Badge_R", 0.05, 0.01, (0, bounds["y_rear_bump"] + 0.01,
-                           curves["zt"](curves["L"]) * 0.85), materials["Chrome"], axis='Y')]
+    return [_cylinder_obj("Badge_F", 0.04, 0.01, (0, bounds["y_front_bump"] - 0.015,
+                           curves["zt"](0.02) * 0.96), materials["Chrome"], axis='Y'),
+            _cylinder_obj("Badge_R", 0.04, 0.01, (0, bounds["y_rear_bump"] + 0.015,
+                           curves["zt"](curves["L"] - 0.02) * 0.96), materials["Chrome"], axis='Y')]
 
 
 def build_interior(spec, curves, bounds, materials):

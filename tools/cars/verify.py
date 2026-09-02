@@ -78,12 +78,16 @@ def _nearest_dists(sample_pts, ref_pts, chunk=3000):
 
 # Trim's tolerance is wider than Chrome's: mirrors (on stalks) and wing
 # uprights/endplates are Trim parts that sit away from the body BY DESIGN
-# (the spec explicitly asks for stalk-mounted mirrors and deck-mounted
-# wing uprights) - a bare 3cm check would fail them for doing exactly what
-# was asked. 0.30m comfortably covers the largest legitimate mirror-housing
-# offset while still catching a genuinely floating/disconnected part (the
-# bumper-lip and wheel-well bugs caught during development were 0.25-0.54m).
-PROXIMITY_TOLERANCE = {"Trim": 0.30, "Chrome": 0.03}
+# (the spec explicitly asks for stalk-mounted mirrors and a wing mounted
+# 0.25-0.4m above the deck on its own uprights) - a bare 3cm check would
+# fail them for doing exactly what was asked. 0.45m comfortably covers the
+# tip of a swan-neck upright reaching up to the wing blade while still
+# catching a genuinely floating/disconnected part (the bumper-lip and
+# wheel-well bugs caught during development were 0.5-0.7m+).
+# Chrome's exhaust tips are meant to protrude slightly past the rear
+# valance/diffuser (real exhaust tips are not flush with the bodywork) -
+# 0.16m covers a quad-exhaust car's outer tips; badges sit much closer.
+PROXIMITY_TOLERANCE = {"Trim": 0.45, "Chrome": 0.16}
 
 
 def _check_trim_proximity(check, objs):

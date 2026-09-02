@@ -68,6 +68,25 @@ OVERRIDES = {
     # would otherwise drop it as a paddock-access road, breaking loop
     # connectivity (way id from cache/brands_hatch.json).
     "brands_hatch": {"keep_way_ids": {25804653}},
+    # Monza's OSM data includes the banked oval ("anello alta velocita" --
+    # Sopraelevata Nord/Sud, Tondo, Raccordo Junior) and the former Pirelli
+    # test track (Ex Circuito Pirelli), both highway=raceway/sport=motor so
+    # the base filters keep them; the spec explicitly wants the GP road
+    # course only. Confirmed 2026-09-02: without this exclusion the walk
+    # cuts across the oval and comes up 25.7% short of the real 5793 m lap.
+    "monza": {"extra_drop_regex": r"sopraelevata|alta velocit|\btondo\b|raccordo junior|ex circuito pirelli"},
+    # Silverstone's OSM data also has the separate, smaller "Stowe Circuit"
+    # driving-experience track sharing junction nodes near Stowe corner;
+    # without excluding it the walk short-loops onto it (confirmed
+    # 2026-09-02: an 866 m loop, -85% off the real 5891 m GP lap).
+    "silverstone": {"extra_drop_regex": r"stowe circuit"},
+    # Tsukuba's OSM data covers the whole complex: the 2045 m "Course 2000"
+    # we want, plus a separate "Course 1000", an oval course, and a paddock
+    # loop, all sharing junctions. Restricting to only ways literally named
+    # "コース2000" (Course 2000) isolates the real GP circuit cleanly
+    # (confirmed 2026-09-02: unrestricted walk produced a 177.9 deg heading
+    # kink -- a spur onto one of the other courses).
+    "tsukuba": {"name_keep_regex": "コース2000"},
     # nurburgring_gp: DROPPED, not overridden. Investigated at length on
     # 2026-09-01/02: the Nurburgring GP-Strecke's OSM ways are topologically
     # entangled with the adjacent Sprintstrecke and Mullenbachschleife --
@@ -106,6 +125,13 @@ def build_one(spec, elevation_fn=None):
                 e
                 for e in elements
                 if not any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
+            ]
+        if "name_keep_regex" in override:
+            pat = re.compile(override["name_keep_regex"])
+            elements = [
+                e
+                for e in elements
+                if any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
             ]
         kept, pit_ways = filter_ways(elements, keep_way_ids=override.get("keep_way_ids"))
 

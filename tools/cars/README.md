@@ -60,23 +60,35 @@ loft**, driven entirely by tunable keypoint tables (`specs.get_profile`):
    capped with an n-gon, then Bevel (0.03 m, 2 segments) + one Subdivision
    level.
 3. Wheel arches are a boolean difference per wheel (cylinder, radius
-   `wheelRadius+0.05`), not baked into the profile, plus a partial-torus
-   lip in Paint (left open at the bottom ~80 deg so it can't dip below the
-   ground). The cutter and the wheel hub share one lateral-offset formula
+   `wheelRadius+0.05`), not baked into the profile. Box-arch cars
+   (`box_arches` in `CarSpec`) union a rounded, ground-clearing flare box
+   6cm wider than the body *before* that cut. A wheel-well shell (Trim, 3cm
+   inset) is added only where the fender's own local height at that axle
+   (`zt(x_axle)`) has real overhead clearance - a torus lip was tried first
+   and always read as a floating ring, and an unconditional shell pokes
+   above an open-wheel car's fender since it doesn't exist there. The
+   cutter and the wheel hub share one lateral-offset formula
    (`body.wheel_lateral_offset`) so the wheel is always centred in its arch.
-4. The greenhouse is an independent rounded-trapezoid loft from `xa`
-   (windscreen base) to `xc` (backlight base): wide base sunk 4 cm into
-   the belt, narrower rounded top riding `zr(x)`. Its own top-facing
-   faces (>60 deg from horizontal) are re-tagged Paint by face normal so
-   the roof reads as sheet metal; the rest stays Glass. A/B/C pillars are
-   separate boxes that run only from `zt(x)` to `zr(x)` **at that same x**
-   and are rotated to the local roof-curve slope, so they can never rise
-   above the roof.
-5. Detail placement (lights, mirrors, grille, bumper lips, wing) queries
-   `body.size_at_y()` / the same `zt`/`zr` curves the loft was built from,
-   so it stays flush with whatever the loft actually produced - the rear
-   wing's uprights, in particular, start exactly on `zt(x)` at the wing's
-   own position, so it can't float clear of the deck.
+4. The greenhouse (`build_greenhouse`) is an independent rounded-trapezoid
+   loft from `xa` (windscreen base) to `xc` (backlight base): wide base
+   sunk 4cm into the belt, narrower rounded top riding the roof curve
+   `zr(x)` (which reaches all the way to `H = spec['height']`, with a
+   flat-roof section at least 0.5m long for coupes/GT3/LMP or 1.0m for a
+   hatch/sedan - `specs._fit_cabin_span` widens the cabin automatically if
+   a short car can't fit that). The *whole* loft is Paint - so A/B/C
+   pillars and the roof are solid sheet metal automatically, no separate
+   pillar objects - and Glass is a second, independent set of panels
+   copied from whichever faces' real post-construction position/normal
+   qualify as windscreen (`normal.y` forward > 25 deg), rear screen
+   (mirrored) or side window (`|normal.x| > 0.7`, with a 6cm painted gap
+   left at the B-pillar, `xb = xa + 0.62*(xc-xa)`), each pushed 0.5cm proud.
+5. Detail placement (lights, mirrors, grille, bumper lips, splitter, wing)
+   queries `body.size_at_y()` / the same `zt`/`zr` curves the loft was
+   built from, so it stays flush with whatever the loft actually
+   produced. Bumper lips and the splitter are swept ribbons sampled at 5
+   stations along `w(x)` (`details._swept_strip`), not a flat plank; the
+   rear wing's uprights start exactly on `zt(x)` at the wing's own
+   position, so it can't float clear of the deck.
 
 Preview renders recolour `Paint` to a mid blue (#2a5fb8) and use a
 1.2 m eye-height camera at a 30 deg azimuth so the shape reads like a
@@ -85,15 +97,19 @@ white `Paint` the contract calls for.
 
 ## Deliberate deviations from the brief
 
-- Wheel arches/window apertures are still booleans (as asked), but the main
-  body panel is a three-view intersection rather than a single cross
-  -section loft - see above for why.
 - `hood_length_ratio` in `CarSpec` is currently unused (hood proportion is
   implied by the roof-span fractions + style-based screen/back-span
   instead); kept in the spec for a future tuning pass.
-- `mid_engine` / `rear_engine` / `closed_cockpit` / `fin` / `fender_bulges`
-  flags exist in `CarSpec` but don't yet change geometry - noted as
-  unfinished in the build report.
+- `mid_engine` now drives the cabin belt ratio (0.68*H, per
+  `specs.belt_ratio`) but not the rest of the silhouette; `rear_engine` /
+  `closed_cockpit` / `fin` / `fender_bulges` flags exist in `CarSpec` but
+  don't yet change geometry - noted as unfinished in the build report.
+- `verify.py`'s Trim/Chrome "within Ncm of the body surface" check uses a
+  wider tolerance than a literal 3cm for parts the brief itself asks to
+  sit away from the body by design (mirrors on stalks, wing uprights
+  reaching up to a blade mounted 0.25-0.4m above the deck, exhaust tips
+  that protrude past the valance) - see the comment above
+  `PROXIMITY_TOLERANCE` in `verify.py` for the exact numbers and reasoning.
 
 ## GLB contract
 

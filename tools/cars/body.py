@@ -7,21 +7,26 @@ created):
   1. Five profile functions (`specs.get_profile`) evaluated with a damped
      Catmull-Rom spline (`curves.catmull_rom_eval`, tension 0.5) at
      stations every 0.04 m: w(x) plan half-width, zf(x) floor height,
-     zt(x) lower-body top (hood/belt/deck line), rt(x) top corner radius.
-     rb (rocker radius) is a constant.
+     zt(x) lower-body top (hood/belt/deck line - the CABIN span of zt is
+     the belt height, `specs.belt_ratio(spec) * spec['height']`), rt(x)
+     top corner radius. rb (rocker radius) is a constant.
   2. Each station is ONE rounded-rectangle cross-section (28 points: four
      6-point corner arcs + the four edge midpoints, the top one carrying a
      slight crown) - identical topology everywhere, so the loft can't
      self-intersect. Consecutive stations are bridged with quads, the two
      end stations capped with an n-gon, then Bevel + one Subdivision level.
   3. Wheel arches are cut with a boolean difference per wheel (not baked
-     into the profile), plus a torus lip.
+     into the profile). Box-arch cars union a rounded flare first. A
+     wheel-well shell (Trim) is added only where the fender has genuine
+     overhead clearance - no torus lip (it read as a floating ring).
   4. The greenhouse is an independent rounded-trapezoid loft from xa to xc
      (tumblehome: wide base sunk into the belt, narrower rounded top that
-     rides the roof curve `zr(x)`); its own top-facing (>60 deg from
-     horizontal) faces are re-tagged Paint so the roof reads as sheet
-     metal, the rest stays Glass. A/B/C pillars are separate raked boxes
-     that never rise above zr(x) at their own x.
+     rides the roof curve `zr(x)`, which reaches all the way to H =
+     spec['height']). The WHOLE loft is Paint (`build_greenhouse`'s
+     `shell`) - so A/B/C pillars and the roof are solid sheet metal by
+     construction - and a second, independent Glass object copies only
+     the faces whose real (post-construction) position/normal qualify as
+     windscreen, rear screen or side window, pushed 0.5cm proud.
 """
 import math
 import bmesh
@@ -262,26 +267,23 @@ def union_box_arches(block, spec, b):
 def build_wheel_well_shells(spec, b):
     """A 3cm-inset cylinder shell (open both ends) behind each arch cut so
     the wheel well reads as having real depth instead of a knife-edge hole.
-    Its angular sweep is clamped so it never rises above the body's own
-    local height at that station - a low/open-wheel car's fender doesn't
-    reach as high as a fixed 150 deg sweep would assume, and an unclamped
-    shell then floats above the (absent) bodywork there."""
+    Only built where the fender actually has generous overhead clearance
+    (headroom >= r): the shell's top point is always at the true top of its
+    150 deg sweep, so anything less than full clearance would still poke
+    the shell's crown above the (lower, or open-wheel/absent) bodywork -
+    skip it there rather than fake a wheel well that doesn't exist."""
     cv = get_curves(spec, b)
     lat = wheel_lateral_offset(spec)
     r = spec["wheel_radius"] + 0.05 - 0.03
     width = spec["tyre_width"] + 0.14 - 0.05
+    max_deg = 150.0
     shells = []
     for hub_x, x_axle in ((lat, b["x_front_axle"]), (-lat, b["x_front_axle"]),
                            (lat, b["x_rear_axle"]), (-lat, b["x_rear_axle"])):
-        hub_y = blender_y(x_axle, b)
         local_top = cv["zt"](x_axle) - 0.02
-        headroom = local_top - spec["wheel_radius"]
-        if headroom >= r:
-            max_deg = 150.0
-        elif headroom <= 0:
-            max_deg = 20.0
-        else:
-            max_deg = min(150.0, math.degrees(math.acos(max(-1.0, min(1.0, headroom / r)))))
+        if local_top - spec["wheel_radius"] < r:
+            continue
+        hub_y = blender_y(x_axle, b)
         bm = bmesh.new()
         segs = 28
         ring_a, ring_b = [], []
