@@ -6,6 +6,7 @@ import {
   InstancedMesh,
   MeshStandardMaterial,
   Object3D,
+  Vector3,
 } from 'three';
 import { makeRng } from '../../../../core/math';
 import { frameAtS } from '../../furniture/common';
@@ -56,6 +57,9 @@ export function buildForestBelt(
         const x = frame.point.x + frame.right.x * lateral;
         const z = frame.point.z + frame.right.z * lateral;
         const y = terrainHeightAt(track, x, z, frame.index).y;
+        // the circuit may pass nearby again (parallel straights): never plant inside any corridor
+        const probe = track.query(new Vector3(x, y, z), null);
+        if (Math.abs(probe.lateral) < track.barrierDistance(probe.index) + 4) continue;
         const scale = 0.8 + rng() * 0.6;
         placeTree(trunks, canopies, dummy, i, x, y, z, scale, rng());
         i++;

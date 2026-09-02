@@ -15,6 +15,12 @@ export interface TrackScene {
   /** asphalt surfaces (used by the renderer for reflections/decals) */
   roadMeshes: THREE.Mesh[];
   setRacingLineVisible(v: boolean): void;
+  /** recolours ribbon segments [from, from+count) (sample indices, wrapping) with colour(i) */
+  recolorRacingLine(
+    from: number,
+    count: number,
+    colour: (i: number) => [number, number, number],
+  ): void;
   /** 0..5 red lights lit on the gantry, -1 = all off (green) */
   setStartLights(count: number): void;
   /** per-frame: flags waving, distant LOD toggles, etc. */

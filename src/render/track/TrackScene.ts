@@ -1,4 +1,4 @@
-import { Box3, Group, Mesh, Vector3 } from 'three';
+import { Box3, BufferAttribute, Group, Mesh, Vector3 } from 'three';
 import type { Track } from '../../track/Track';
 import { buildRoad } from './road';
 import { buildCurbs } from './curbs';
@@ -111,6 +111,18 @@ export function buildTrackScene(track: Track, options: TrackSceneOptions): Track
     roadMeshes: parts.roadMeshes,
     setRacingLineVisible: (v: boolean) => {
       if (parts.racingLineMesh) parts.racingLineMesh.visible = v;
+    },
+    recolorRacingLine: (from, count, colour) => {
+      const mesh = parts.racingLineMesh;
+      if (!mesh) return;
+      const attr = mesh.geometry.getAttribute('color') as BufferAttribute;
+      const steps = attr.count / 6;
+      for (let k = 0; k < count; k++) {
+        const i = (((from + k) % steps) + steps) % steps;
+        const [r, g, b] = colour(i);
+        for (let v = 0; v < 6; v++) attr.setXYZ(i * 6 + v, r, g, b);
+      }
+      attr.needsUpdate = true;
     },
     setStartLights: parts.setStartLights,
     update: (dt: number, cameraPos: Vector3) => {

@@ -219,11 +219,40 @@ export class RaceRuntime {
     this.camera.update(player, dt);
     this.renderer.updateShadowTarget(player.pos);
     this.trackScene.update(dt, this.renderer.camera.position);
+    this.updateDrivingLine();
     this.rain?.update(dt, this.renderer.camera.position, this.wind);
     this.updateStartLights();
     this.feedAudio(dt);
     this.rumble(inputManager, dt);
     s.hud(this.hud);
+  }
+
+  private static readonly RED: [number, number, number] = [0.95, 0.12, 0.1];
+  private static readonly YELLOW: [number, number, number] = [0.95, 0.85, 0.15];
+  private static readonly BLUE: [number, number, number] = [0.2, 0.6, 1.0];
+  private static readonly DIM: [number, number, number] = [0.35, 0.35, 0.4];
+
+  /**
+   * GT-style dynamic driving line: red where the player must brake for what is
+   * ahead at their current speed, blue where they can accelerate, yellow when
+   * they are on the limit. Only the stretch around the player is recoloured.
+   */
+  private updateDrivingLine(): void {
+    const v = this.session.player.vehicle;
+    const line = this.session.line;
+    const n = line.speed.length;
+    const grip = v.tyres.mu * 0.97;
+    const carFactor = Math.sqrt((grip * 0.9) / 1.38);
+    const speed = Math.abs(v.speed);
+    const start = v.query.index - 20;
+    this.trackScene.recolorRacingLine(start, 220, (i) => {
+      const k = (((i - start) % n) + n) % n;
+      if (k < 20) return RaceRuntime.DIM;
+      const allowed = line.speed[i] * carFactor;
+      if (speed > allowed * 1.04) return RaceRuntime.RED;
+      if (speed < allowed * 0.94) return RaceRuntime.BLUE;
+      return RaceRuntime.YELLOW;
+    });
   }
 
   private updateStartLights(): void {

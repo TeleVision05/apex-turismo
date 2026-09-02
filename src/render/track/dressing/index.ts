@@ -1,4 +1,4 @@
-import { Group } from 'three';
+import { Box3, Group, Vector3 } from 'three';
 import type { Track } from '../../../track/Track';
 import { mergeDisposables, newDisposables, type Disposables } from '../types';
 import type { TrackSceneOptions } from '../types';
@@ -25,6 +25,16 @@ export interface DressingBuild {
 }
 
 /** Builds the per-track "dressing": grandstands, buildings, landmarks, backdrops and signage, from a declarative spec. */
+/** True when a landmark's footprint centre lies inside any part of the track corridor. */
+function intrudesCorridor(track: Track, group: Group): boolean {
+  const box = new Box3().setFromObject(group);
+  if (box.isEmpty()) return false;
+  const c = box.getCenter(new Vector3());
+  const q = track.query(c, null);
+  const half = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5;
+  return Math.abs(q.lateral) < track.barrierDistance(q.index) + 2 && half < 60;
+}
+
 export function buildDressing(track: Track, options: TrackSceneOptions): DressingBuild {
   const group = new Group();
   group.name = 'dressing';
@@ -41,6 +51,7 @@ export function buildDressing(track: Track, options: TrackSceneOptions): Dressin
   for (const raw of spec.landmarks) {
     const landmark = { ...raw, s: shift(raw.s) };
     const built = buildLandmark(ctx, landmark);
+    if (intrudesCorridor(track, built.group)) continue;
     group.add(built.group);
     mergeDisposables(disposables, built.disposables);
   }
