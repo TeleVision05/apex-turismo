@@ -1,92 +1,92 @@
 [
-  {
-    "id": "brands_hatch",
-    "name": "Brands Hatch GP",
-    "country": "UK",
-    "lengthM": 3889.3,
-    "direction": "clockwise",
-    "corners": 18,
-    "elevationRangeM": 41.7
-  },
-  {
-    "id": "fuji",
-    "name": "Fuji Speedway",
-    "country": "Japan",
-    "lengthM": 4564.8,
-    "direction": "clockwise",
-    "corners": 6,
-    "elevationRangeM": 53.5
-  },
-  {
-    "id": "interlagos",
-    "name": "Autodromo Jose Carlos Pace",
-    "country": "Brazil",
-    "lengthM": 4293.8,
-    "direction": "anticlockwise",
-    "corners": 19,
-    "elevationRangeM": 45.1
-  },
-  {
-    "id": "laguna_seca",
-    "name": "WeatherTech Raceway Laguna Seca",
-    "country": "USA",
-    "lengthM": 3590.8,
-    "direction": "anticlockwise",
-    "corners": 6,
-    "elevationRangeM": 47.9
-  },
-  {
-    "id": "monza",
-    "name": "Autodromo Nazionale Monza",
-    "country": "Italy",
-    "lengthM": 5754.8,
-    "direction": "clockwise",
-    "corners": 11,
-    "elevationRangeM": 23.0
-  },
-  {
-    "id": "red_bull_ring",
-    "name": "Red Bull Ring",
-    "country": "Austria",
-    "lengthM": 4295.8,
-    "direction": "clockwise",
-    "corners": 10,
-    "elevationRangeM": 65.8
-  },
-  {
-    "id": "silverstone",
-    "name": "Silverstone Circuit",
-    "country": "UK",
-    "lengthM": 5874.8,
-    "direction": "clockwise",
-    "corners": 17,
-    "elevationRangeM": 11.9
-  },
-  {
-    "id": "spa",
-    "name": "Circuit de Spa-Francorchamps",
-    "country": "Belgium",
-    "lengthM": 6970.4,
-    "direction": "clockwise",
-    "corners": 16,
-    "elevationRangeM": 97.1
-  },
-  {
-    "id": "suzuka",
-    "name": "Suzuka Circuit",
-    "country": "Japan",
-    "lengthM": 5803.5,
-    "direction": "clockwise",
-    "corners": 24,
-    "elevationRangeM": 48.4
-  },
-  {
-    "id": "tsukuba",
-    "name": "Tsukuba Circuit",
-    "country": "Japan",
-    "lengthM": 2118.4,
-    "direction": "clockwise",
-    "corners": 6,
-    "elevationRangeM": 2.9
-  }
+ {
+  "id": "brands_hatch",
+  "name": "Brands Hatch GP",
+  "country": "UK",
+  "lengthM": 3883.0,
+  "direction": "clockwise",
+  "corners": 18,
+  "elevationRangeM": 41.7
+ },
+ {
+  "id": "fuji",
+  "name": "Fuji Speedway",
+  "country": "Japan",
+  "lengthM": 4537.7,
+  "direction": "clockwise",
+  "corners": 6,
+  "elevationRangeM": 47.3
+ },
+ {
+  "id": "interlagos",
+  "name": "Autodromo Jose Carlos Pace",
+  "country": "Brazil",
+  "lengthM": 4291.5,
+  "direction": "anticlockwise",
+  "corners": 19,
+  "elevationRangeM": 44.9
+ },
+ {
+  "id": "laguna_seca",
+  "name": "WeatherTech Raceway Laguna Seca",
+  "country": "USA",
+  "lengthM": 3586.7,
+  "direction": "anticlockwise",
+  "corners": 6,
+  "elevationRangeM": 47.9
+ },
+ {
+  "id": "monza",
+  "name": "Autodromo Nazionale Monza",
+  "country": "Italy",
+  "lengthM": 5752.1,
+  "direction": "clockwise",
+  "corners": 11,
+  "elevationRangeM": 22.5
+ },
+ {
+  "id": "red_bull_ring",
+  "name": "Red Bull Ring",
+  "country": "Austria",
+  "lengthM": 4293.8,
+  "direction": "clockwise",
+  "corners": 7,
+  "elevationRangeM": 65.8
+ },
+ {
+  "id": "silverstone",
+  "name": "Silverstone Circuit",
+  "country": "UK",
+  "lengthM": 5838.2,
+  "direction": "clockwise",
+  "corners": 17,
+  "elevationRangeM": 11.9
+ },
+ {
+  "id": "spa",
+  "name": "Circuit de Spa-Francorchamps",
+  "country": "Belgium",
+  "lengthM": 6966.3,
+  "direction": "clockwise",
+  "corners": 16,
+  "elevationRangeM": 97.6
+ },
+ {
+  "id": "suzuka",
+  "name": "Suzuka Circuit",
+  "country": "Japan",
+  "lengthM": 5794.6,
+  "direction": "clockwise",
+  "corners": 24,
+  "elevationRangeM": 48.8
+ },
+ {
+  "id": "tsukuba",
+  "name": "Tsukuba Circuit",
+  "country": "Japan",
+  "lengthM": 2111.7,
+  "direction": "clockwise",
+  "corners": 5,
+  "elevationRangeM": 2.9
+ }
 ]

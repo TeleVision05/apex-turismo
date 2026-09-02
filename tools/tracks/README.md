@@ -41,7 +41,18 @@ range, corner count, max heading kink) is printed at the end.
   (direction) and heading-kink checks.
 - `elevation.py` — batched (100 coords/request) Open-Meteo lookups with
   retry/backoff on rate limiting, periodic smoothing (sigma = 25 m) and
-  grade clamping to 12%.
+  grade clamping to 12%. `fetch_elevations_strided` (the default path) only
+  queries ~120 evenly-spaced points per track and periodically interpolates
+  the rest, rather than every resampled point — a deliberate deviation from
+  querying every 4 m sample: the source DEM is ~90 m resolution, so 4 m
+  sampling is heavy oversampling of the same pixels, and Open-Meteo's free
+  tier has a per-hour request cap that a dozen ~1400-point tracks blows
+  through fast. `fetch_elevations` (dense, every point) is still there and
+  used when a track's elevation is already fully cached from an earlier run.
+- `bulk_fetch.py` — one-off helper to fetch several tracks' raceway ways in
+  a single combined Overpass query (union of `around` filters) and split
+  the result into normal per-track cache files, for when public Overpass
+  mirrors are rate-limiting per-request rather than per-payload.
 - `pitlane.py` — optional pit-lane polyline extraction (elevation borrowed
   from the nearest main-loop point); set to `null` when the pit lane geometry
   looks too messy or too far from the loop.
@@ -75,4 +86,42 @@ range, corner count, max heading kink) is printed at the end.
 Coordinates are local meters (equirectangular projection centered on the
 loop): `+x` east, `+z` south, `y` = elevation above the track's lowest point.
 `public/tracks/index.json` is a flat list of `{id, name, country, lengthM,
-direction, corners, elevationRangeM}` for every track that built successfully.
+direction, corners, elevationRangeM}` for every track that built successfully
+— it is rebuilt from every `<id>.json` actually present in `public/tracks/`
+each run (`rebuild_index()`), not just the tracks built in that particular
+invocation, so building a subset never drops previously-built tracks from it.
+
+## Status (last full run)
+
+10 of 12 tracks in the spec's table built cleanly: suzuka, monza, spa,
+laguna_seca, brands_hatch, tsukuba, fuji, interlagos, red_bull_ring,
+silverstone. Two were skipped:
+
+- **nurburgring_gp** — the GP-Strecke's OSM ways are topologically entangled
+  with the adjacent Sprintstrecke and Mullenbachschleife (they share
+  physical tarmac tagged only under the other circuit's name at the
+  junction). Every radius/name-exclusion combination tried either broke
+  loop connectivity or reproduced the same wrong ~4587 m loop through
+  "Nurburgring Sprintstrecke" + "Rallycross circuit" ways. See the comment
+  above `OVERRIDES` in `build_tracks.py` for the full list of what was tried.
+- **bathurst** — the `highway~tertiary|secondary|...` road fallback query
+  (public Overpass mirrors were flapping between connection-refused, 500s
+  and 403s for long stretches of this session, so it took several attempts
+  to even get a response) returns real Bathurst road names (Panorama
+  Avenue, Mountain Straight, Conrod Straight, Pit Straight, Forrest's
+  Elbow, McPhillamy Park, Brocks Skyline, Sulman Park), but the public
+  street graph doesn't stitch end-to-end from just those named ways --
+  the walk closes on an 894 m loop, 86% short of the real 6213 m lap,
+  because the unnamed connecting street segments between them (minor
+  links, roundabouts) aren't part of the name-filtered fetch. Per the
+  spec's own note that Bathurst may not be worth stitching, this was
+  skipped rather than widening the name regex indefinitely.
+
+Known limitation: **silverstone** has one ~40 m stretch (Chapel
+Curve → Hangar Straight) where the resampled centerline shows a spurious
+~130 deg heading spike from a spline-evaluation artifact (a long, sparsely
+digitized 146 m OSM chord sitting right next to a real corner). Confirmed
+it is not a stitching/topology bug — every node through that stretch has
+exactly one outgoing graph edge, so the walk had no alternative branch to
+take. `geometry._densify()` mitigates it (worse before: ~143 deg) but
+doesn't fully remove it.

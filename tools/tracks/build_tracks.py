@@ -12,6 +12,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from collections import Counter
 
 import numpy as np
 
@@ -87,6 +88,14 @@ OVERRIDES = {
     # (confirmed 2026-09-02: unrestricted walk produced a 177.9 deg heading
     # kink -- a spur onto one of the other courses).
     "tsukuba": {"name_keep_regex": "コース2000"},
+    # Red Bull Ring's OSM data also carries MotoGP-only extras (a "Long Lap
+    # Penalty" runoff loop, a MotoGP-specific chicane) and the separate,
+    # shorter "Sudschleife National Circuit" layout, all sharing junctions
+    # with the GP layout. Excluding them by name removes a detour right
+    # after the start/finish that the corner labels revealed (confirmed
+    # 2026-09-02): the walk passed through "Sudschleife National Circuit"
+    # and "Moto GP chicane" before ever reaching Remus, the real turn 2.
+    "red_bull_ring": {"extra_drop_regex": r"s[uü]dschleife|long lap penalty|moto\s*gp chicane"},
     # nurburgring_gp: DROPPED, not overridden. Investigated at length on
     # 2026-09-01/02: the Nurburgring GP-Strecke's OSM ways are topologically
     # entangled with the adjacent Sprintstrecke and Mullenbachschleife --
@@ -105,55 +114,49 @@ OVERRIDES = {
 }
 
 
-def build_one(spec, elevation_fn=None):
-    tid, name, country, length_m, direction, width_m, lat, lon, radius_m = spec
-    override = OVERRIDES.get(tid, {})
-    elevation_fn = elevation_fn or fetch_elevations_strided
-    radius_m = override.get("radius_m", radius_m)
-
+def _fetch_and_filter_ways(tid, override, lat, lon, radius_m):
+    """Fetch this track's Overpass ways and apply base + override filters.
+    Returns (kept_ways, pit_ways)."""
     if "fallback_name_regex" in override:
         q = road_fallback_query(lat, lon, radius_m, override["fallback_name_regex"])
         raw = fetch_overpass(tid, q, cache_suffix="_roads")
         kept = [e for e in raw["elements"] if e.get("type") == "way" and "geometry" in e]
-        pit_ways = []
-    else:
-        raw = fetch_overpass(tid, raceway_query(lat, lon, radius_m))
-        elements = raw["elements"]
-        if "extra_drop_regex" in override:
-            pat = re.compile(override["extra_drop_regex"], re.I)
-            elements = [
-                e
-                for e in elements
-                if not any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
-            ]
-        if "name_keep_regex" in override:
-            pat = re.compile(override["name_keep_regex"])
-            elements = [
-                e
-                for e in elements
-                if any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
-            ]
-        kept, pit_ways = filter_ways(elements, keep_way_ids=override.get("keep_way_ids"))
+        return kept, []
 
-    if len(kept) < 2:
-        raise RuntimeError(f"only {len(kept)} usable ways after filtering")
+    raw = fetch_overpass(tid, raceway_query(lat, lon, radius_m))
+    elements = raw["elements"]
+    if "extra_drop_regex" in override:
+        pat = re.compile(override["extra_drop_regex"], re.I)
+        elements = [
+            e
+            for e in elements
+            if not any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
+        ]
+    if "name_keep_regex" in override:
+        pat = re.compile(override["name_keep_regex"])
+        elements = [
+            e
+            for e in elements
+            if any(pat.search(v) for k, v in e.get("tags", {}).items() if k == "name" or k.startswith("name:"))
+        ]
+    return filter_ways(elements, keep_way_ids=override.get("keep_way_ids"))
 
-    _, origin = project_ways(kept, pit_ways)
-    node_xy, edges = build_graph(kept)
-    loop_path, loop_len_pre = find_loop(kept, node_xy, edges, length_m)
+
+def _stitch_and_orient(kept, node_xy, edges, length_m, direction, start_way):
+    """Find the loop, resample it to 4m spacing, and rotate/reverse it so
+    index 0 is start/finish and the array runs in the racing direction.
+    Returns (loop_nodes, xs_r, ns_r)."""
+    loop_path, _ = find_loop(kept, node_xy, edges, length_m)
     loop_nodes = loop_path[:-1]
 
     xs = np.array([node_xy[n][0] for n in loop_nodes])
     ns = np.array([node_xy[n][1] for n in loop_nodes])
     xs_r, ns_r = resample_closed_loop(xs, ns, spacing=4.0)
 
-    signed_area = signed_area_xn(xs_r, ns_r)
-    is_anticlockwise = signed_area > 0
-    wants_anticlockwise = direction == "anticlockwise"
-    if is_anticlockwise != wants_anticlockwise:
+    is_anticlockwise = signed_area_xn(xs_r, ns_r) > 0
+    if is_anticlockwise != (direction == "anticlockwise"):
         xs_r, ns_r = xs_r[::-1], ns_r[::-1]
 
-    start_way = _find_start_way(kept)
     if start_way is not None:
         mx, mn = start_way["xy"][len(start_way["xy"]) // 2]
     else:
@@ -161,33 +164,66 @@ def build_one(spec, elevation_fn=None):
     start_idx = nearest_index(xs_r, ns_r, mx, mn)
     xs_r = np.roll(xs_r, -start_idx)
     ns_r = np.roll(ns_r, -start_idx)
-    start_idx = 0
+    return loop_nodes, xs_r, ns_r
 
-    lats, lons = _inverse_project(xs_r, ns_r, origin)
-    raw_elev = elevation_fn(tid, lats, lons)
-    ys_r = process_elevation(raw_elev, spacing_m=4.0)
 
-    loop_node_set = set(loop_nodes)
+def _build_corners(kept, loop_node_set, xs_r, ns_r, track_name):
+    """Named corners from OSM ways, topped up with curvature-peak "Turn N"
+    markers when there are fewer than 6."""
     corner_defs = extract_corners(kept, loop_node_set)
+    # A name repeated across 3+ ways is a facility/course label (e.g. every
+    # segment of Tsukuba's OSM data is literally named "コース2000" / "Course
+    # 2000"), not a distinct corner name -- drop it so synthesis fills in
+    # real "Turn N" markers instead.
+    name_counts = Counter(c["name"].strip().lower() for c in corner_defs)
+    n_defs = len(corner_defs)
     corners = []
     for c in corner_defs:
-        if c["name"].strip().lower() == name.strip().lower():
-            continue  # whole-circuit name (e.g. OSM tagged the full loop, not a corner)
+        key = c["name"].strip().lower()
+        # Repeated names are normal (a corner complex like Suzuka's "'S'
+        # Curves" spans several OSM ways with the same name) -- only treat
+        # a name as a generic facility label, not a real corner, when it
+        # covers the *majority* of all corner candidates (e.g. every single
+        # kept way for Tsukuba is literally named "Course 2000").
+        is_generic_label = name_counts[key] >= 3 and name_counts[key] / n_defs > 0.5
+        if key == track_name.strip().lower() or is_generic_label:
+            continue  # whole-circuit / generic facility label, not a corner
         idx = int(nearest_index(xs_r, ns_r, c["mid_xy"][0], c["mid_xy"][1]))
         corners.append({"name": c["name"], "number": c["number"], "index": idx})
     corners.sort(key=lambda c: c["index"])
 
     if len(corners) < 6:
         corners = _synthesize_corners(corners, xs_r, ns_r, needed=6)
+    return corners
 
+
+def build_one(spec, elevation_fn=None):
+    tid, name, country, length_m, direction, width_m, lat, lon, radius_m = spec
+    override = OVERRIDES.get(tid, {})
+    elevation_fn = elevation_fn or fetch_elevations_strided
+    radius_m = override.get("radius_m", radius_m)
+
+    kept, pit_ways = _fetch_and_filter_ways(tid, override, lat, lon, radius_m)
+    if len(kept) < 2:
+        raise RuntimeError(f"only {len(kept)} usable ways after filtering")
+
+    _, origin = project_ways(kept, pit_ways)
+    node_xy, edges = build_graph(kept)
+    loop_nodes, xs_r, ns_r = _stitch_and_orient(
+        kept, node_xy, edges, length_m, direction, _find_start_way(kept)
+    )
+
+    lats, lons = _inverse_project(xs_r, ns_r, origin)
+    raw_elev = elevation_fn(tid, lats, lons)
+    ys_r = process_elevation(raw_elev, spacing_m=4.0)
+
+    corners = _build_corners(kept, set(loop_nodes), xs_r, ns_r, name)
     width = dominant_width(kept) or width_m
     widths = [width] * len(xs_r)
-
     pit_lane = build_pit_lane(pit_ways, xs_r, ns_r, ys_r, node_xy)
 
     points = [[round(float(x), 2), round(float(y), 2), round(float(-n), 2)] for x, n, y in zip(xs_r, ns_r, ys_r)]
     total_len = _loop_length(points)
-
     kinks = heading_kinks_deg(np.array([p[0] for p in points]), np.array([p[2] for p in points]))
 
     out = {
@@ -199,7 +235,7 @@ def build_one(spec, elevation_fn=None):
         "sampleSpacingM": 4,
         "points": points,
         "widths": widths,
-        "startIndex": start_idx,
+        "startIndex": 0,
         "corners": corners,
         "pitLane": pit_lane,
         "origin": {"lat": round(origin[0], 2), "lon": round(origin[1], 2)},

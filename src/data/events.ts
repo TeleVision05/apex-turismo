@@ -124,11 +124,11 @@ export const EVENTS: RaceEvent[] = [
     requires: 'supercar_monza',
   },
   {
-    id: 'gt3_nurburgring',
+    id: 'gt3_silverstone',
     series: 'GT World Series',
-    name: 'GT World Series: Nürburgring GP',
-    description: 'Gr.3 racing cars only. Six laps on the Grand Prix circuit.',
-    trackId: 'nurburgring_gp',
+    name: 'GT World Series: Silverstone',
+    description: 'Gr.3 racing cars only. Six laps through Maggotts, Becketts and Chapel.',
+    trackId: 'silverstone',
     laps: 6,
     opponents: 13,
     allowedClasses: ['Gr.3', 'Gr.4'],
@@ -140,12 +140,12 @@ export const EVENTS: RaceEvent[] = [
     requires: 'supercar_spa',
   },
   {
-    id: 'gt3_bathurst',
+    id: 'gt3_interlagos',
     series: 'GT World Series',
-    name: 'GT World Series: Mount Panorama',
+    name: 'GT World Series: Interlagos',
     description:
-      'Across the top of the mountain with walls on both sides. The hardest six laps you will drive.',
-    trackId: 'bathurst',
+      'Anticlockwise, uphill and downhill, through the Senna S. The hardest six laps you will drive.',
+    trackId: 'interlagos',
     laps: 6,
     opponents: 13,
     allowedClasses: ['Gr.3', 'Gr.4'],
@@ -154,7 +154,7 @@ export const EVENTS: RaceEvent[] = [
     payoutCr: [100000, 60000, 38000],
     difficulty: 'expert',
     timeOfDay: 'evening',
-    requires: 'gt3_nurburgring',
+    requires: 'gt3_silverstone',
   },
   {
     id: 'lmp_spa',
@@ -170,7 +170,7 @@ export const EVENTS: RaceEvent[] = [
     payoutCr: [250000, 150000, 90000],
     difficulty: 'expert',
     timeOfDay: 'night',
-    requires: 'gt3_bathurst',
+    requires: 'gt3_interlagos',
   },
 ];
 
