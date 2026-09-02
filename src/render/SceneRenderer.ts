@@ -159,7 +159,7 @@ export class SceneRenderer {
         )
         .replace(
           'gl_FragColor = vec4( texColor, 1.0 );',
-          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 2.6 ) ), 1.0 );',
+          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 1.9 ) ), 1.0 );',
         );
     };
     this.scene.add(this.sky);
