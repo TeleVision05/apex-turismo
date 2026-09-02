@@ -39,7 +39,7 @@ export function peakPowerKw(spec: CarSpec, powerMul = 1): number {
 
 /**
  * Performance Points: a single number summarising pace, in the spirit of
- * GT7's PP. Calibrated so a 130 hp hatch is ~330 PP and a GT3 car ~730 PP.
+ * GT7's PP. Calibrated so a 130 hp coupe is ~335 PP and a GT3 car ~650 PP.
  */
 export function performancePoints(spec: CarSpec, t: CarTuning): number {
   const eff = applyTuning(spec, t);
@@ -48,7 +48,7 @@ export function performancePoints(spec: CarSpec, t: CarTuning): number {
   const tyreMul = { comfort: 0.88, sport: 1.0, racing: 1.16 }[t.tyres];
   const grip = eff.tyreGrip * tyreMul;
   const aero = (eff.downforceFront + eff.downforceRear) * eff.downforceMul;
-  const pp = 150 + powerToWeight * 1400 + grip * 180 + aero * 22;
+  const pp = 100 + powerToWeight * 850 + grip * 170 + aero * 14;
   return Math.round(pp);
 }
 
