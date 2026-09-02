@@ -8,6 +8,7 @@ import sys
 import json
 
 import bpy
+import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
@@ -32,6 +33,88 @@ def _find(name, objs):
     return None
 
 
+def _check_greenhouse_and_wing(check, world_pts, entry):
+    H = entry.get("H")
+    y_front, y_rear = entry.get("greenhouseYFront"), entry.get("greenhouseYRear")
+    if H is None or y_front is None or y_rear is None:
+        return
+    span_z = [p.z for p in world_pts if y_rear - 0.05 <= p.y <= y_front + 0.05]
+    if span_z:
+        check("greenhouse max Z ~= H", H - 0.03 <= max(span_z) <= H + 0.01,
+              f"max_z={max(span_z):.3f} H={H:.3f}")
+    if not entry.get("hasWing", False):
+        all_max_z = max(p.z for p in world_pts)
+        check("nothing above H+0.05 (no wing on this car)", all_max_z <= H + 0.05,
+              f"max_z={all_max_z:.3f} H={H:.3f}")
+
+
+def _check_wheel_centring(check, objs, entry):
+    width, tyre_width = entry.get("width"), entry.get("tyreWidth")
+    if width is None or tyre_width is None:
+        return
+    expected_lat = width / 2.0 - tyre_width / 2.0 - 0.02
+    for wname in ("Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"):
+        obj = _find(wname, objs)
+        if obj is None:
+            continue
+        actual = abs(obj.matrix_world.translation.x)
+        check(f"{wname} centred in its arch", abs(actual - expected_lat) < 0.01,
+              f"actual={actual:.4f} expected={expected_lat:.4f}")
+
+
+def _nearest_dists(sample_pts, ref_pts, chunk=3000):
+    sample = np.array(sample_pts)
+    ref = np.array(ref_pts)
+    min_d = np.full(len(sample), np.inf)
+    for i in range(0, len(ref), chunk):
+        blk = ref[i:i + chunk]
+        d = np.linalg.norm(sample[:, None, :] - blk[None, :, :], axis=2)
+        min_d = np.minimum(min_d, d.min(axis=1))
+    return min_d
+
+
+def _check_trim_proximity(check, objs):
+    body = _find("Body", objs)
+    if body is None:
+        return
+    body_pts = [tuple(body.matrix_world @ v.co) for v in body.data.vertices]
+    for name in ("Trim", "Chrome"):
+        obj = _find(name, objs)
+        if obj is None or not obj.data.vertices:
+            continue
+        pts = [tuple(obj.matrix_world @ v.co) for v in obj.data.vertices]
+        pts = pts[::max(1, len(pts) // 400)]  # subsample for speed
+        d = _nearest_dists(pts, body_pts)
+        check(f"{name} detail objects within 3cm of the body surface",
+              float(d.max()) <= 0.03, f"max_dist={float(d.max()):.4f}")
+
+
+def _check_wheel_ground_contact(check, objs, wheel_radius):
+    for wname in ("Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"):
+        obj = _find(wname, objs)
+        if obj is None:
+            continue
+        wm = obj.matrix_world.translation
+        if wheel_radius is not None:
+            check(f"{wname} hub Z ~= wheel radius", abs(wm.z - wheel_radius) < 0.02,
+                  f"z={wm.z:.4f} r={wheel_radius}")
+        mesh_min_z = min((obj.matrix_world @ v.co).z for v in obj.data.vertices)
+        check(f"{wname} tyre bottom within 1cm of Z=0", mesh_min_z < 0.011,
+              f"min_z={mesh_min_z:.4f}")
+
+    fl, fr = _find("Wheel_FL", objs), _find("Wheel_FR", objs)
+    rl, rr = _find("Wheel_RL", objs), _find("Wheel_RR", objs)
+    if fl and fr:
+        check("front wheels symmetric in X",
+              abs(fl.matrix_world.translation.x + fr.matrix_world.translation.x) < 0.01)
+    if rl and rr:
+        check("rear wheels symmetric in X",
+              abs(rl.matrix_world.translation.x + rr.matrix_world.translation.x) < 0.01)
+    if fl and rl:
+        check("front wheel ahead of rear wheel (+Y nose)",
+              fl.matrix_world.translation.y > rl.matrix_world.translation.y)
+
+
 def verify_car(car_id, index_by_id):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     glb_path = os.path.join(MODELS_DIR, f"{car_id}.glb")
@@ -54,40 +137,21 @@ def verify_car(car_id, index_by_id):
         obj = _find(name, objs)
         check(f"object '{name}' exists", obj is not None)
 
-    wheel_radius = index_by_id.get(car_id, {}).get("wheelRadius")
-    for wname in ("Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR"):
-        obj = _find(wname, objs)
-        if obj is None:
-            continue
-        wm = obj.matrix_world.translation
-        if wheel_radius is not None:
-            check(f"{wname} hub Z ~= wheel radius", abs(wm.z - wheel_radius) < 0.02,
-                  f"z={wm.z:.4f} r={wheel_radius}")
-        mesh_min_z = min((obj.matrix_world @ v.co).z for v in obj.data.vertices)
-        check(f"{wname} tyre bottom within 1cm of Z=0", mesh_min_z < 0.011,
-              f"min_z={mesh_min_z:.4f}")
-
-    fl = _find("Wheel_FL", objs)
-    fr = _find("Wheel_FR", objs)
-    rl = _find("Wheel_RL", objs)
-    rr = _find("Wheel_RR", objs)
-    if fl and fr:
-        check("front wheels symmetric in X",
-              abs(fl.matrix_world.translation.x + fr.matrix_world.translation.x) < 0.01)
-    if rl and rr:
-        check("rear wheels symmetric in X",
-              abs(rl.matrix_world.translation.x + rr.matrix_world.translation.x) < 0.01)
-    if fl and rl:
-        check("front wheel ahead of rear wheel (+Y nose)",
-              fl.matrix_world.translation.y > rl.matrix_world.translation.y)
+    _check_wheel_ground_contact(check, objs, index_by_id.get(car_id, {}).get("wheelRadius"))
 
     body = _find("Body", objs)
+    entry = index_by_id.get(car_id, {})
     if body:
-        verts_y = [(body.matrix_world @ v.co).y for v in body.data.vertices]
-        verts_z = [(body.matrix_world @ v.co).z for v in body.data.vertices]
+        world_pts = [body.matrix_world @ v.co for v in body.data.vertices]
+        verts_y = [p.y for p in world_pts]
+        verts_z = [p.z for p in world_pts]
         check("body nose extends toward +Y", max(verts_y) > abs(min(verts_y)) * 0.3)
         check("body sits on/above ground (min Z >= -0.02)", min(verts_z) >= -0.02,
               f"min_z={min(verts_z):.4f}")
+        _check_greenhouse_and_wing(check, world_pts, entry)
+
+    _check_wheel_centring(check, objs, entry)
+    _check_trim_proximity(check, objs)
 
     total_tris = 0
     for o in objs:

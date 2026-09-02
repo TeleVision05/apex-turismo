@@ -45,23 +45,22 @@ def _finalize_group(obj, mat):
 
 def _build_body_and_glass(spec, curves, bounds, mats):
     body_obj = body.build_body(spec, bounds, mats)
-    glass_obj = body.build_glass(spec, bounds, mats)
-    pillar_parts = body.build_pillars(spec, bounds, mats)
-    for p in pillar_parts:
-        p.data.materials.append(mats["Trim"])
+    greenhouse_paint, glass_obj = body.build_greenhouse(spec, bounds, mats)
+    well_shells = body.build_wheel_well_shells(spec, bounds)
+    for s in well_shells:
+        s.data.materials.append(mats["Trim"])
     wing_body, wing_trim = details.build_wing(spec, curves, bounds, mats)
-    if wing_body:
-        body_obj = export_mod.join_group([body_obj] + wing_body, "Body")
-        _finalize_group(body_obj, mats["Paint"])
-    return body_obj, glass_obj, pillar_parts, wing_trim
+    body_obj = export_mod.join_group([body_obj, greenhouse_paint] + wing_body, "Body")
+    _finalize_group(body_obj, mats["Paint"])
+    return body_obj, glass_obj, well_shells, wing_trim
 
 
-def _build_detail_groups(spec, curves, bounds, mats, pillar_parts, wing_trim):
+def _build_detail_groups(spec, curves, bounds, mats, well_shells, wing_trim):
     trim_parts = (details.build_mirrors(spec, curves, bounds, mats)
                   + details.build_grille(spec, curves, bounds, mats)
                   + details.build_bumper_lips(spec, curves, bounds, mats)
                   + details.build_splitter_diffuser(spec, curves, bounds, mats)
-                  + wing_trim + pillar_parts)
+                  + wing_trim + well_shells)
     trim_obj = _finalize_group(export_mod.join_group(trim_parts, "Trim"), mats["Trim"])
 
     chrome_parts = details.build_exhaust(spec, bounds, mats) + details.build_badge(spec, bounds, mats)
@@ -91,8 +90,8 @@ def build_one_car(car_id, do_render=True):
 
     bounds = body.compute_bounds(spec)
     curves = body.get_curves(spec, bounds)
-    body_obj, glass_obj, pillar_parts, wing_trim = _build_body_and_glass(spec, curves, bounds, mats)
-    groups = _build_detail_groups(spec, curves, bounds, mats, pillar_parts, wing_trim)
+    body_obj, glass_obj, well_shells, wing_trim = _build_body_and_glass(spec, curves, bounds, mats)
+    groups = _build_detail_groups(spec, curves, bounds, mats, well_shells, wing_trim)
     steering_obj = details.build_steering_wheel(spec, curves, bounds, mats)
     wb = wheels.build_all_wheels(spec, mats)
 
@@ -121,7 +120,7 @@ def build_one_car(car_id, do_render=True):
         preview_paths = render_mod.render_views(spec, PREVIEW_DIR, car_id)
 
     return dict(spec=spec, tri_count=tri_count, glb_path=glb_path,
-                preview_paths=preview_paths, bounds=bounds, measured=measured)
+                preview_paths=preview_paths, bounds=bounds, curves=curves, measured=measured)
 
 
 def write_index(entries):
@@ -145,6 +144,7 @@ def main():
         print(f"=== building {car_id} ===")
         result = build_one_car(car_id, do_render=True)
         m = result["measured"]
+        cv, sp = result["curves"], result["spec"]
         index_entries.append(dict(
             id=car_id, file=f"{car_id}.glb",
             length=round(m["length"], 4), width=round(m["width"], 4),
@@ -152,6 +152,10 @@ def main():
             trackFront=round(m["trackFront"], 4), trackRear=round(m["trackRear"], 4),
             wheelRadius=round(m["wheelRadius"], 4), tyreWidth=round(m["tyreWidth"], 4),
             triangles=result["tri_count"],
+            H=round(cv["H"], 4),
+            greenhouseYFront=round(body.blender_y(cv["xa"], result["bounds"]), 4),
+            greenhouseYRear=round(body.blender_y(cv["xc"], result["bounds"]), 4),
+            hasWing=sp.get("wing", "none") != "none",
         ))
         print(f"    triangles={result['tri_count']} glb={result['glb_path']}")
 

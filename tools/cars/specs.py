@@ -192,30 +192,57 @@ def get_spec(car_id):
 # shape stays tunable without touching body.py.
 STYLE_RAKE = {
     # (screen_run, back_run) - how many metres the windscreen/backlight
-    # take to go from the belt up to the roof (and back down)
-    "wedge": (0.78, 0.42), "prototype": (0.70, 0.46), "gt_race": (0.55, 0.42),
-    "hatch": (0.52, 0.58), "fastback": (0.52, 0.68), "notchback": (0.46, 0.50),
+    # take to go from the belt up to the roof (and back down). Both must
+    # land in [0.55, 0.75] / [0.45, 0.70] respectively.
+    "wedge": (0.60, 0.50), "prototype": (0.60, 0.55), "gt_race": (0.55, 0.45),
+    "hatch": (0.60, 0.55), "fastback": (0.60, 0.60), "notchback": (0.55, 0.50),
 }
 STYLE_XA = {  # A-pillar-base (cowl) fraction of length from the nose
-    "wedge": 0.53, "prototype": 0.50, "gt_race": 0.40,
+    "wedge": 0.46, "prototype": 0.44, "gt_race": 0.40,
     "hatch": 0.34, "fastback": 0.38, "notchback": 0.40,
 }
 STYLE_XC = {  # C-pillar-base (backlight base) fraction of length from nose
-    "wedge": 0.80, "prototype": 0.80, "gt_race": 0.76,
+    "wedge": 0.85, "prototype": 0.84, "gt_race": 0.76,
     "hatch": 0.86, "fastback": 0.90, "notchback": 0.80,
 }
+
+
+def belt_ratio(spec):
+    """Belt (cabin zt) height as a fraction of H = spec['height']:
+    0.62 coupe/sedan, 0.58 hatch, 0.66 GT3/LMP, 0.68 mid-engine supercar."""
+    if spec.get("mid_engine"):
+        return 0.68
+    if spec["body_style"] in ("gt_race", "prototype"):
+        return 0.66
+    if spec["body_style"] == "hatch":
+        return 0.58
+    return 0.62
+
+
+def _fit_cabin_span(xa, xc, L, screen_run, back_run, min_flat):
+    """Widen xa/xc symmetrically (clamped) until the cabin span can fit
+    the required windscreen + flat-roof + backlight run lengths."""
+    needed = screen_run + min_flat + back_run
+    span = (xc - xa) * L
+    if span < needed:
+        half_deficit = (needed - span) / 2.0
+        xa = max(0.18, xa - half_deficit / L)
+        xc = min(0.94, xc + half_deficit / L)
+    return xa, xc
 
 
 def get_profile(spec):
     """Keypoint tables for the deterministic loft in body.py: w (plan
     half-width), zf (floor), zt (lower-body top / belt line), each a list
-    of (x_fraction_from_nose, value_metres); plus the greenhouse span."""
+    of (x_fraction_from_nose, value_metres); plus the greenhouse span.
+    H is the full spec height (the greenhouse roof must reach it, not the
+    lower `roof_height` used for the old hood/trunk styling)."""
     L = spec["length"]
     hw = spec["width"] / 2.0
     gc = spec["ground_clearance"]
-    H = spec["roof_height"]
-    shoulder_z = H * 0.0 + spec["height"] * spec["shoulder_height_ratio"]
-    belt_z = spec["height"] * spec["belt_height_ratio"]
+    H = spec["height"]
+    shoulder_z = spec["height"] * spec["shoulder_height_ratio"]
+    belt_z = H * belt_ratio(spec)
     rear_deck_z = spec["rear_deck_height"]
     style = spec["body_style"]
 
@@ -231,8 +258,10 @@ def get_profile(spec):
 
     xa = STYLE_XA.get(style, 0.40)
     xc = STYLE_XC.get(style, 0.80)
-    xb = (xa + xc) / 2.0
-    screen_run, back_run = STYLE_RAKE.get(style, (0.5, 0.5))
+    screen_run, back_run = STYLE_RAKE.get(style, (0.55, 0.50))
+    min_flat = 1.0 if style == "hatch" else 0.5
+    xa, xc = _fit_cabin_span(xa, xc, L, screen_run, back_run, min_flat)
+    xb = xa + 0.62 * (xc - xa)  # B-pillar at 0.62 of the cabin span
 
     nose_bump = shoulder_z * 0.80
     tail_bump = shoulder_z * 0.78

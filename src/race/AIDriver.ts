@@ -27,10 +27,8 @@ export class AIDriver {
     seed: number,
   ) {
     this.rng = makeRng(seed);
-    const s = vehicle.spec;
     const grip = vehicle.tyres.mu * 0.97;
-    const aero = (s.downforceFront + s.downforceRear) * s.downforceMul;
-    this.carFactor = Math.sqrt(grip / 1.38) * (1 + Math.min(0.14, aero * 0.025));
+    this.carFactor = Math.sqrt((grip * 0.9) / 1.38);
   }
 
   update(dt: number, others: Vehicle[], out: InputState): void {
@@ -50,7 +48,8 @@ export class AIDriver {
     // Stanley-style steering: heading error to the line tangent, cross-track term and curvature feed-forward
     const tangent = this.lineTangent(aheadIdx);
     const headingErr = Math.atan2(tangent.dot(v.right), Math.max(0.05, tangent.dot(v.forward)));
-    const crossTrack = Math.atan((1.4 * x) / (speed + 3));
+    const crossErr = lateralTarget - q.lateral; // metres to move right
+    const crossTrack = Math.atan((1.3 * crossErr) / (speed + 3));
     const ffIdx = wrapIndex(q.index + Math.round((speed * 0.9 + 6) / track.spacing), n);
     const feedForward = Math.atan(v.spec.wheelbaseM * this.lineCurvature(ffIdx));
     let wheelAngle = headingErr + crossTrack + feedForward - v.angVel.y * -0.02;
@@ -133,7 +132,9 @@ export class AIDriver {
   /** Feeds the power in progressively and backs off when the car starts to slide. */
   private tractionLimit(speed: number): number {
     const v = this.vehicle;
-    const launch = clamp(0.45 + speed / 18, 0, 1);
+    const offRoad = v.offTrackWheels >= 2;
+    const launch = clamp((offRoad ? 0.7 : 0.45) + speed / 18, 0, 1);
+    if (offRoad && speed < 8) return launch; // crawl out of gravel/grass without the slip limiters
     const slide = clamp(1 - (Math.abs(v.slipAngle) - 0.05) / 0.2, 0.15, 1);
     const steerLoad =
       speed < 8 ? 1 : clamp(1 - (Math.abs(v.steerAngle) / v.steerScale() - 0.35) * 0.9, 0.35, 1);
@@ -144,9 +145,12 @@ export class AIDriver {
   }
 
   private targetSpeed(index: number, speed: number): number {
-    const ahead = 8 + speed * 2.4;
+    // the profile already contains the braking phases; only a short reaction margin is needed
+    const ahead = 6 + speed * 0.25;
     const base = this.line.minSpeedAhead(index, ahead);
-    return base * this.skill * this.carFactor;
+    // downforce adds grip only at speed: scale by the profile speed at this point
+    const aero = Math.sqrt(1 + 0.45 * Math.min(1.0, this.aeroBoost(base * this.carFactor)));
+    return base * this.skill * this.carFactor * aero;
   }
 
   private updateNoise(dt: number): void {

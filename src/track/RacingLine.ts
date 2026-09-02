@@ -27,7 +27,7 @@ export class RacingLine {
     this.curvature = new Float32Array(n);
     this.computeCurvature();
     this.speed = new Float32Array(n);
-    this.computeSpeeds(1.38, 10.5, 6, 100);
+    this.computeSpeeds(1.38, 8.5, 6, 100);
   }
 
   /**
@@ -79,17 +79,17 @@ export class RacingLine {
   private computeCurvature(): void {
     const n = this.points.length;
     for (let i = 0; i < n; i++) {
-      const a = this.points[wrapIndex(i - 3, n)];
+      const a = this.points[wrapIndex(i - 2, n)];
       const b = this.points[i];
-      const c = this.points[wrapIndex(i + 3, n)];
+      const c = this.points[wrapIndex(i + 2, n)];
       this.curvature[i] = mengerCurvature(a, b, c);
     }
-    // smooth curvature
+    // conservative: take the tightest curvature in a small window so chicanes are not underestimated
     const copy = Float32Array.from(this.curvature);
     for (let i = 0; i < n; i++) {
-      let sum = 0;
-      for (let k = -2; k <= 2; k++) sum += copy[wrapIndex(i + k, n)];
-      this.curvature[i] = sum / 5;
+      let m = 0;
+      for (let k = -2; k <= 2; k++) m = Math.max(m, copy[wrapIndex(i + k, n)]);
+      this.curvature[i] = m;
     }
   }
 

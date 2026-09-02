@@ -80,39 +80,40 @@ def _cylinder_obj(name, radius, length, loc, mat, axis='Y', segments=16, rot=(0,
     return obj
 
 
+# (width, depth, height) - real lens sizes, not slabs. quad_round (GT3) is
+# two round discs per side instead, handled separately below.
 LIGHT_SIZE = {
-    "flat_pop": (0.42, 0.10, 0.16), "wedge": (0.36, 0.09, 0.13),
-    "quad_round": (0.30, 0.10, 0.20), "angular": (0.38, 0.09, 0.15),
-    "slit": (0.46, 0.06, 0.07),
+    "flat_pop": (0.30, 0.05, 0.14), "wedge": (0.34, 0.05, 0.12),
+    "angular": (0.34, 0.05, 0.12), "slit": (0.34, 0.04, 0.09),
 }
 
 
 def _light_pair(style, y, z, half_w, depth, mat, name_prefix):
     """Front or rear light cluster, mirrored L/R. Returns list of objects."""
-    w, d, h = LIGHT_SIZE.get(style, LIGHT_SIZE["wedge"])
     objs = []
     for side, sx in (("L", -1), ("R", 1)):
         cx = sx * half_w
         if style == "quad_round":
-            r = h / 4.4
-            for row in range(2):
-                for col in range(2):
-                    ox = cx + sx * (col - 0.5) * r * 2.3
-                    oz = z + (row - 0.5) * r * 2.3
-                    objs.append(_cylinder_obj(f"{name_prefix}_{side}_{row}{col}", r,
-                                               depth, (ox, y, oz), mat, axis='Y'))
+            r = 0.07  # 0.14 m discs, two per side
+            for i, oz in enumerate((z - r * 1.1, z + r * 1.1)):
+                objs.append(_cylinder_obj(f"{name_prefix}_{side}_{i}", r,
+                                           depth, (cx, y, oz), mat, axis='Y'))
         else:
+            w, d, h = LIGHT_SIZE.get(style, LIGHT_SIZE["wedge"])
             objs.append(_box_obj(f"{name_prefix}_{side}", (w, depth, h),
                                   (cx, y, z), mat))
     return objs
 
 
 def build_headlights(spec, curves, bounds, materials):
-    y = bounds["y_front_bump"] - 0.08
-    half_w, top = body.size_at_y(curves, bounds, y)
-    hw = half_w * 0.90
-    z = top * 0.72
-    return _light_pair(spec["headlight_style"], y + 0.05, z, hw, 0.06,
+    """Inset 1cm into the nose surface, centred at 0.55 of the nose
+    (bumper-top) height."""
+    nose_x = 0.02 * curves["L"]
+    y = body.blender_y(nose_x, bounds) - 0.01
+    half_w, _ = body.size_at_y(curves, bounds, y)
+    hw = half_w * 0.80
+    z = curves["zt"](0.0) * 0.55
+    return _light_pair(spec["headlight_style"], y, z, hw, 0.04,
                         materials["Headlight"], "Headlight")
 
 
@@ -153,35 +154,72 @@ def build_mirrors(spec, curves, bounds, materials):
 
 
 def build_grille(spec, curves, bounds, materials):
-    y = bounds["y_front_bump"] - 0.10
-    half_w, _ = body.size_at_y(curves, bounds, y)
-    hw = half_w * 0.55
-    z = spec["height"] * (0.30 if not spec.get("tall_grille") else 0.24)
-    h = spec["height"] * (0.14 if not spec.get("tall_grille") else 0.24)
-    return [_box_obj("Grille", (hw * 2, 0.03, h), (0, y + 0.07, z), materials["Trim"])]
+    """40% of the car's width x 0.12 m, sat between the headlights."""
+    nose_x = 0.02 * curves["L"]
+    y = body.blender_y(nose_x, bounds) - 0.005
+    hw = spec["width"] * 0.20
+    z = curves["zt"](0.0) * 0.55
+    return [_box_obj("Grille", (hw * 2, 0.02, 0.12), (0, y, z), materials["Trim"])]
+
+
+def _swept_strip(name, curves, bounds, x_samples, half_w_scale, z_fn,
+                  thickness, mat):
+    """A thin ribbon that follows the loft's own w(x) at each sample x -
+    used for the bumper lips/splitter so they hug the nose/tail curvature
+    instead of being a flat plank."""
+    bm = bmesh.new()
+    rings = []
+    for x in x_samples:
+        hw = curves["w"](max(0.0, min(curves["L"], x))) * half_w_scale
+        y = body.blender_y(x, bounds)
+        z = z_fn(x)
+        rings.append([
+            bm.verts.new((-hw, y, z - thickness / 2)),
+            bm.verts.new((hw, y, z - thickness / 2)),
+            bm.verts.new((hw, y, z + thickness / 2)),
+            bm.verts.new((-hw, y, z + thickness / 2)),
+        ])
+    for i in range(len(rings) - 1):
+        a, b = rings[i], rings[i + 1]
+        for j in range(4):
+            v1, v2 = a[j], a[(j + 1) % 4]
+            v3, v4 = b[(j + 1) % 4], b[j]
+            bm.faces.new((v1, v2, v3, v4))
+    for ring in (rings[0], rings[-1]):
+        try:
+            bm.faces.new(ring)
+        except ValueError:
+            pass
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    obj = _new_object(name)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.materials.append(mat)
+    return obj
 
 
 def build_bumper_lips(spec, curves, bounds, materials):
-    y_f = bounds["y_front_bump"] - 0.05
-    y_r = bounds["y_rear_bump"] + 0.05
-    hw_f, _ = body.size_at_y(curves, bounds, y_f)
-    hw_r, _ = body.size_at_y(curves, bounds, y_r)
-    return [
-        _box_obj("BumperLip_F", (hw_f * 1.5, 0.04, 0.05),
-                  (0, y_f - 0.02, spec["ground_clearance"] * 0.55), materials["Trim"]),
-        _box_obj("BumperLip_R", (hw_r * 1.5, 0.04, 0.05),
-                  (0, y_r + 0.02, spec["ground_clearance"] * 0.55), materials["Trim"]),
-    ]
+    L = curves["L"]
+    front_x = [0.0, 0.03 * L, 0.06 * L, 0.10 * L, 0.15 * L]
+    rear_x = [L - x for x in reversed(front_x)]
+    z_f = lambda x: curves["zf"](x) * 0.55
+    front = _swept_strip("BumperLip_F", curves, bounds, front_x, 0.86, z_f,
+                          0.03, materials["Trim"])
+    rear = _swept_strip("BumperLip_R", curves, bounds, rear_x, 0.86, z_f,
+                         0.03, materials["Trim"])
+    return [front, rear]
 
 
 def build_splitter_diffuser(spec, curves, bounds, materials):
     objs = []
     hw = spec["width"] / 2
     if spec.get("splitter"):
-        zf0 = curves["zf"](0.0) - 0.02
-        objs.append(_box_obj("Splitter", (hw * 1.9, 0.20, 0.03),
-                              (0, bounds["y_front_bump"] + 0.08, zf0),
-                              materials["Trim"]))
+        L = curves["L"]
+        protrusion = 0.06
+        x_samples = [-protrusion, 0.0, 0.04 * L, 0.09 * L, 0.15 * L]
+        z_f = lambda x: curves["zf"](max(0.0, x)) - 0.02
+        objs.append(_swept_strip("Splitter", curves, bounds, x_samples, 0.90,
+                                  z_f, 0.02, materials["Trim"]))
     if spec.get("diffuser"):
         n_fins = 5
         for i in range(n_fins):
@@ -208,20 +246,23 @@ def build_wing(spec, curves, bounds, materials):
         trim = [_box_obj("Wing_lip", (hw * 1.6, 0.14, 0.02),
                           (0, y, deck_z + 0.02), materials["Trim"])]
         return [], trim
-    # gt3: blade + 2 uprights + 2 endplates. `span` is the wing's HALF-span
-    # (kept a little inside the body's own half-width, like a real wing).
-    span = hw * 0.86
+    # gt3: blade (90% of W) + 2 uprights (swan-neck ones angle in from the
+    # blade's underside) + 2 endplates (0.25 x 0.12 m).
+    span = hw * 0.90
     height = spec["height"] * (0.34 if spec.get("wing_swanneck") else 0.28)
     blade_z = deck_z + height
     body_parts = [_box_obj("Wing_blade", (span * 2, 0.22, 0.025), (0, y, blade_z),
                             materials["Paint"])]
     trim = []
+    swan = spec.get("wing_swanneck")
     for sx in (-1, 1):
-        ux = sx * span * 0.75
+        ux_top = sx * span * (0.55 if swan else 0.75)
+        ux_base = sx * span * 0.75
         trim.append(_box_obj(f"Wing_upright_{sx}", (0.035, 0.10, height),
-                              (ux, y, deck_z + height / 2),
-                              materials["Trim"]))
-        trim.append(_box_obj(f"Wing_endplate_{sx}", (0.02, 0.26, height * 0.9),
+                              ((ux_top + ux_base) / 2, y, deck_z + height / 2),
+                              materials["Trim"],
+                              rot=(0, 0, math.atan2(ux_top - ux_base, height) if swan else 0)))
+        trim.append(_box_obj(f"Wing_endplate_{sx}", (0.02, 0.25, 0.12),
                               (sx * span, y, blade_z), materials["Trim"]))
     return body_parts, trim
 

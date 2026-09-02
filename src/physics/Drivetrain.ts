@@ -132,7 +132,7 @@ export class Drivetrain {
     }
     this.reverseHold = 0;
     const rpm = this.rpm;
-    const upshiftAt = this.redline * (throttle > 0.7 ? 0.985 : 0.75);
+    const upshiftAt = this.redline * (throttle > 0.5 ? 0.985 : throttle > 0.2 ? 0.9 : 0.72);
     if (this.gear < this.maxGear && rpm > upshiftAt && wheelOmega > 0) {
       this.shiftUp();
       return;
@@ -141,8 +141,8 @@ export class Drivetrain {
       const lowerRatio = this.ratios[this.gear - 2] * this.finalDrive;
       const rpmInLower = Math.abs(wheelOmega * lowerRatio) * RAD_TO_RPM;
       const eager = brake > 0.3 || throttle > 0.9;
-      const threshold = eager ? this.redline * 0.9 : this.redline * 0.72;
-      if (rpmInLower < threshold && rpm < this.redline * 0.62) this.shiftDown();
+      const threshold = eager ? this.redline * 0.92 : this.redline * 0.8;
+      if (rpmInLower < threshold && rpm < this.redline * 0.68) this.shiftDown();
     }
   }
 

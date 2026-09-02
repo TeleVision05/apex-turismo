@@ -159,7 +159,7 @@ export class SceneRenderer {
         )
         .replace(
           'gl_FragColor = vec4( texColor, 1.0 );',
-          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 2.2 ) ), 1.0 );',
+          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 1.8 ) ), 1.0 );',
         );
     };
     this.scene.add(this.sky);
@@ -229,7 +229,7 @@ export class SceneRenderer {
     u.turbidity.value = overcast ? 20 : p.turbidity;
     u.rayleigh.value = overcast ? 0.8 : p.rayleigh;
     u.mieCoefficient.value = overcast ? 0.02 : 0.005;
-    u.mieDirectionalG.value = 0.8;
+    u.mieDirectionalG.value = 0.92;
     this.sun.color.set(p.sunColor);
     this.sun.intensity = p.sunIntensity * (overcast ? 0.35 : 1);
     this.sun.visible = p.elevationDeg > -3 || true;

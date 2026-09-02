@@ -25,8 +25,14 @@ from stitch import (
     dominant_width,
     START_WAY_RE,
 )
-from geometry import resample_closed_loop, signed_area_xn, heading_kinks_deg, nearest_index
-from elevation import fetch_elevations_strided, process_elevation
+from geometry import (
+    resample_closed_loop,
+    signed_area_xn,
+    heading_kinks_deg,
+    nearest_index,
+    find_curvature_peaks,
+)
+from elevation import fetch_elevations_strided, fetch_elevations, process_elevation
 from pitlane import build_pit_lane
 from plotting import plot_track
 
@@ -77,9 +83,10 @@ OVERRIDES = {
 }
 
 
-def build_one(spec):
+def build_one(spec, elevation_fn=None):
     tid, name, country, length_m, direction, width_m, lat, lon, radius_m = spec
     override = OVERRIDES.get(tid, {})
+    elevation_fn = elevation_fn or fetch_elevations_strided
 
     if "fallback_name_regex" in override:
         q = road_fallback_query(lat, lon, radius_m, override["fallback_name_regex"])
@@ -127,7 +134,7 @@ def build_one(spec):
     start_idx = 0
 
     lats, lons = _inverse_project(xs_r, ns_r, origin)
-    raw_elev = fetch_elevations_strided(tid, lats, lons)
+    raw_elev = elevation_fn(tid, lats, lons)
     ys_r = process_elevation(raw_elev, spacing_m=4.0)
 
     loop_node_set = set(loop_nodes)
@@ -139,6 +146,9 @@ def build_one(spec):
         idx = int(nearest_index(xs_r, ns_r, c["mid_xy"][0], c["mid_xy"][1]))
         corners.append({"name": c["name"], "number": c["number"], "index": idx})
     corners.sort(key=lambda c: c["index"])
+
+    if len(corners) < 6:
+        corners = _synthesize_corners(corners, xs_r, ns_r, needed=6)
 
     width = dominant_width(kept) or width_m
     widths = [width] * len(xs_r)
@@ -176,6 +186,37 @@ def build_one(spec):
         "maxKink": float(kinks.max()),
     }
     return out, stats
+
+
+def _synthesize_corners(corners, xs_r, ns_r, needed=6, min_sep_samples=20):
+    """Top up a too-short OSM corner list with corners derived from
+    curvature peaks (heading-change local maxima), named "Turn 1", "Turn
+    2"... in driving order. Used when OSM has few/no named corner ways for
+    a track (e.g. Fuji Speedway only tags the whole loop, not its corners)."""
+    zs_r = -ns_r
+    peak_idxs = find_curvature_peaks(xs_r, zs_r)
+    existing_idxs = [c["index"] for c in corners]
+
+    def far_enough(idx):
+        n = len(xs_r)
+        for e in existing_idxs:
+            d = min(abs(idx - e), n - abs(idx - e))
+            if d < min_sep_samples:
+                return False
+        return True
+
+    chosen = []
+    for idx in peak_idxs:
+        if len(corners) + len(chosen) >= needed:
+            break
+        if far_enough(idx) and all(min(abs(idx - c), len(xs_r) - abs(idx - c)) >= min_sep_samples for c in chosen):
+            chosen.append(idx)
+
+    chosen.sort()
+    synthetic = [{"name": f"Turn {i + 1}", "number": i + 1, "index": int(idx)} for i, idx in enumerate(chosen)]
+    merged = corners + synthetic
+    merged.sort(key=lambda c: c["index"])
+    return merged
 
 
 def _find_start_way(ways):
@@ -241,21 +282,33 @@ def main():
         all_stats.append(stats)
         print(f"OK {tid}: {stats['points']} pts, {stats['lengthM']:.0f}m (real {stats['realLengthM']}m), max kink {stats['maxKink']:.1f} deg")
 
-    index = [
-        {
-            "id": r["id"],
-            "name": r["name"],
-            "country": r["country"],
-            "lengthM": r["lengthM"],
-            "direction": r["direction"],
-            "corners": len(r["corners"]),
-            "elevationRangeM": round(max(p[1] for p in r["points"]) - min(p[1] for p in r["points"]), 1),
-        }
-        for r in results
-    ]
-    (OUT_DIR / "index.json").write_text(json.dumps(index, indent=2))
-
+    rebuild_index()
     _print_summary(all_stats, failures)
+
+
+def rebuild_index():
+    """Rebuild index.json from every <id>.json actually present in
+    OUT_DIR, not just the tracks built in this particular run -- so running
+    build_tracks.py on a subset of ids never drops previously-built tracks
+    from the index."""
+    index = []
+    for path in sorted(OUT_DIR.glob("*.json")):
+        if path.name == "index.json":
+            continue
+        r = json.loads(path.read_text())
+        index.append(
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "country": r["country"],
+                "lengthM": r["lengthM"],
+                "direction": r["direction"],
+                "corners": len(r["corners"]),
+                "elevationRangeM": round(max(p[1] for p in r["points"]) - min(p[1] for p in r["points"]), 1),
+            }
+        )
+    (OUT_DIR / "index.json").write_text(json.dumps(index, indent=2))
+    return index
 
 
 def _print_summary(all_stats, failures):

@@ -62,7 +62,8 @@ def x_of(y, b):
 
 
 def belt_z_of(spec):
-    return spec["height"] * spec["belt_height_ratio"]
+    from specs import belt_ratio
+    return spec["height"] * belt_ratio(spec)
 
 
 def get_curves(spec, b):
@@ -90,7 +91,8 @@ def get_curves(spec, b):
             return H
         return zt(x)
 
-    return dict(w=w, zf=zf, zt=zt, rt=rt, zr=zr, xa=xa, xb=xb, xc=xc, L=L, H=H)
+    return dict(w=w, zf=zf, zt=zt, rt=rt, zr=zr, xa=xa, xb=xb, xc=xc, L=L, H=H,
+                belt_z=prof["belt_z"])
 
 
 def size_at_y(cv, b, y):
@@ -216,53 +218,74 @@ def cut_wheel_arches(block, spec, b):
     return block
 
 
-def _build_torus(centre, major_r, minor_r, start_deg=-140, end_deg=140,
-                  major_segs=24, minor_segs=8):
-    """A PARTIAL torus (0 deg = straight up) - a real fender lip never
-    wraps under the car the way a full ring would (that dips the mesh
-    below the ground), so the bottom ~80 deg stays open."""
+def _rounded_box(cx, cy, cz, sx, sy, sz):
     bm = bmesh.new()
-    cx, cy, cz = centre
-    rings = []
-    for i in range(major_segs + 1):
-        a = math.radians(start_deg + (end_deg - start_deg) * i / major_segs)
-        ry, rz = math.sin(a), math.cos(a)
-        ring = []
-        for j in range(minor_segs):
-            t = 2 * math.pi * j / minor_segs
-            off = major_r + minor_r * math.cos(t)
-            x = cx + minor_r * math.sin(t)
-            ring.append(bm.verts.new((x, cy + off * ry, cz + off * rz)))
-        rings.append(ring)
-    for i in range(major_segs):
-        _bridge_rings(bm, rings[i], rings[i + 1])
-    for ring in (rings[0], rings[-1]):
-        try:
-            bm.faces.new(ring)
-        except ValueError:
-            pass
+    v = [bm.verts.new(c) for c in (
+        (cx - sx, cy - sy, cz - sz), (cx + sx, cy - sy, cz - sz),
+        (cx + sx, cy + sy, cz - sz), (cx - sx, cy + sy, cz - sz),
+        (cx - sx, cy - sy, cz + sz), (cx + sx, cy - sy, cz + sz),
+        (cx + sx, cy + sy, cz + sz), (cx - sx, cy + sy, cz + sz))]
+    faces = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2),
+             (2, 6, 7, 3), (3, 7, 4, 0)]
+    for f in faces:
+        bm.faces.new([v[i] for i in f])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    obj = _new_object("ArchLip")
+    obj = _new_object("ArchBulge")
     bm.to_mesh(obj.data)
     bm.free()
     return obj
 
 
-def build_arch_lips(spec, b):
+def union_box_arches(block, spec, b):
+    """GT3/box-arch cars: flare the fender 6cm wider than the body over
+    each wheel before the arch is cut, so the arch reads as a boxy flare
+    rather than a plain round hole in a flat panel."""
+    if not spec.get("box_arches"):
+        return block
     lat = wheel_lateral_offset(spec)
-    r = spec["wheel_radius"] + 0.05
-    parts = []
+    r = spec["wheel_radius"]
+    for x_axle in (b["x_front_axle"], b["x_rear_axle"]):
+        hub_y = blender_y(x_axle, b)
+        bulge_half_w = lat + spec["tyre_width"] / 2.0 + 0.06
+        bulge = _rounded_box(0.0, hub_y, r * 0.85, bulge_half_w, 0.34, r * 1.05)
+        bevel = bulge.modifiers.new("Bevel", 'BEVEL')
+        bevel.width = 0.05
+        bevel.segments = 3
+        bpy.context.view_layer.objects.active = bulge
+        bpy.ops.object.modifier_apply(modifier=bevel.name)
+        block = boolean_op(block, bulge, 'UNION')
+    return block
+
+
+def build_wheel_well_shells(spec, b):
+    """A 3cm-inset cylinder shell (open both ends) behind each arch cut so
+    the wheel well reads as having real depth instead of a knife-edge hole."""
+    lat = wheel_lateral_offset(spec)
+    r = spec["wheel_radius"] + 0.05 - 0.03
+    width = spec["tyre_width"] + 0.14 - 0.05
+    shells = []
     for hub_x, x_axle in ((lat, b["x_front_axle"]), (-lat, b["x_front_axle"]),
                            (lat, b["x_rear_axle"]), (-lat, b["x_rear_axle"])):
         hub_y = blender_y(x_axle, b)
-        parts.append(_build_torus((hub_x, hub_y, spec["wheel_radius"]), r, 0.02))
-    return parts
+        bm = bmesh.new()
+        segs = 28
+        ring_a, ring_b = [], []
+        for i in range(segs):
+            a = math.radians(-150 + 300 * i / (segs - 1))
+            y = hub_y + r * math.sin(a)
+            z = spec["wheel_radius"] + r * math.cos(a)
+            ring_a.append(bm.verts.new((hub_x - width / 2, y, z)))
+            ring_b.append(bm.verts.new((hub_x + width / 2, y, z)))
+        _bridge_rings(bm, ring_a, ring_b)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        obj = _new_object("WheelWell")
+        bm.to_mesh(obj.data)
+        bm.free()
+        shells.append(obj)
+    return shells
 
 
-def finish_body(block, materials, arch_lip_parts):
-    # bevel+subsurf FIRST, on the block alone - the lip torus tube (2 cm
-    # minor radius) is thinner than the bevel width and gets mangled if
-    # it's joined in before beveling.
+def finish_body(block, materials):
     bevel = block.modifiers.new("Bevel", 'BEVEL')
     bevel.width = 0.03
     bevel.segments = 2
@@ -276,16 +299,6 @@ def finish_body(block, materials, arch_lip_parts):
     subsurf.render_levels = 1
     bpy.ops.object.modifier_apply(modifier=subsurf.name)
 
-    if arch_lip_parts:
-        bpy.context.view_layer.objects.active = block
-        for o in bpy.context.selected_objects:
-            o.select_set(False)
-        block.select_set(True)
-        for o in arch_lip_parts:
-            o.select_set(True)
-        bpy.ops.object.join()
-        block = bpy.context.view_layer.objects.active
-
     _finalize_single_material(block, materials["Paint"])
     _shade_smooth(block)
     block.name = "Body"
@@ -295,14 +308,13 @@ def finish_body(block, materials, arch_lip_parts):
 def build_body(spec, b, materials):
     cv = get_curves(spec, b)
     block = build_lower_body_block(spec, b, cv)
+    block = union_box_arches(block, spec, b)
     block = cut_wheel_arches(block, spec, b)
-    lips = build_arch_lips(spec, b)
-    return finish_body(block, materials, lips)
+    return finish_body(block, materials)
 
 
 # ----------------------------------------------------------- greenhouse --
-def build_glass(spec, b, materials):
-    cv = get_curves(spec, b)
+def _greenhouse_grid(cv, b):
     xa, xc = cv["xa"], cv["xc"]
     stations_x = _stations(xa, xc, 0.04)
     bm = bmesh.new()
@@ -323,53 +335,57 @@ def build_glass(spec, b, materials):
         except ValueError:
             pass
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-
-    # roof faces (normal within 30 deg of straight up) -> Paint "roof skin";
-    # everything else (the more vertical window glass) -> Glass.
-    for f in bm.faces:
-        f.material_index = 1 if f.normal.z > math.cos(math.radians(30)) else 0
-
-    obj = _new_object("Glass")
-    bm.to_mesh(obj.data)
-    bm.free()
-    obj.data.materials.append(materials["Glass"])
-    obj.data.materials.append(materials["Paint"])
-    _shade_smooth(obj)
-    return obj
+    return bm
 
 
-def _pillar_box(spec, b, cv, x, y_sign):
-    zt, zr = cv["zt"](x), cv["zr"](x)
-    length = max(0.08, zr - zt)
-    dz = 0.05
-    slope = (cv["zr"](x + dz) - cv["zr"](x - dz)) / (2 * dz)
-    angle = math.atan(slope)  # rake of the roof curve in the x/z plane
-
-    bm = bmesh.new()
-    sx, sy, sz = 0.06 / 2, 0.05 / 2, length / 2
-    verts = [bm.verts.new(c) for c in (
-        (-sx, -sy, -sz), (sx, -sy, -sz), (sx, sy, -sz), (-sx, sy, -sz),
-        (-sx, -sy, sz), (sx, -sy, sz), (sx, sy, sz), (-sx, sy, sz))]
-    faces = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1), (1, 5, 6, 2),
-             (2, 6, 7, 3), (3, 7, 4, 0)]
-    for f in faces:
-        bm.faces.new([verts[i] for i in f])
-    obj = _new_object(f"Pillar_{round(x, 2)}_{y_sign}")
-    bm.to_mesh(obj.data)
-    bm.free()
-
-    base_w = cv["w"](x) * 0.86
-    obj.location = (y_sign * (base_w - 0.01), blender_y(x, b), (zt + zr) / 2)
-    # x increases toward the tail (Blender -Y); rotating about local X by
-    # -angle tilts the pillar's top toward -Y as the roof curve rises there.
-    obj.rotation_euler = (-angle, 0, 0)
-    return obj
+def _classify_greenhouse_face(face, x, z, cv, b):
+    """Which window (if any) this face belongs to, purely from its real,
+    already-computed position/normal - not from which corner-arc index it
+    came from, since the rake is what actually tilts a face forward/back."""
+    n = face.normal
+    belt, roof = cv["belt_z"], cv["H"]
+    fwd25 = math.sin(math.radians(25))
+    if abs(x - cv["xb"]) < 0.03:
+        return None  # 6cm painted gap at the B-pillar
+    if belt + 0.02 <= z <= roof - 0.03 and n.y > fwd25:
+        return "windscreen"
+    if belt + 0.02 <= z <= roof - 0.03 and n.y < -fwd25:
+        return "rear_screen"
+    if belt + 0.03 <= z <= roof - 0.06 and abs(n.x) > 0.7:
+        return "side"
+    return None
 
 
-def build_pillars(spec, b, materials):
+def build_greenhouse(spec, b, materials):
+    """Returns (paint_shell, glass) - the whole loft is Paint (so A/B/C
+    pillars and the roof are automatically solid sheet metal); Glass is a
+    second, independent set of panels copied from the *same* faces that
+    qualify as windscreen/rear-screen/side-window, pushed 0.5cm proud."""
     cv = get_curves(spec, b)
-    parts = []
-    for x in (cv["xa"], cv["xb"], cv["xc"]):
-        for y_sign in (-1, 1):
-            parts.append(_pillar_box(spec, b, cv, x, y_sign))
-    return parts
+    bm = _greenhouse_grid(cv, b)
+
+    glass_bm = bmesh.new()
+    for f in list(bm.faces):
+        center = f.calc_center_median()
+        x = x_of(center.y, b)
+        kind = _classify_greenhouse_face(f, x, center.z, cv, b)
+        if kind is None:
+            continue
+        offset = f.normal * 0.005
+        new_verts = [glass_bm.verts.new(v.co + offset) for v in f.verts]
+        glass_bm.faces.new(new_verts)
+
+    shell = _new_object("GreenhouseShell")
+    bm.to_mesh(shell.data)
+    bm.free()
+    shell.data.materials.append(materials["Paint"])
+    _shade_smooth(shell)
+
+    bmesh.ops.recalc_face_normals(glass_bm, faces=glass_bm.faces)
+    glass = _new_object("Glass")
+    glass_bm.to_mesh(glass.data)
+    glass_bm.free()
+    glass.data.materials.append(materials["Glass"])
+    _shade_smooth(glass)
+
+    return shell, glass
