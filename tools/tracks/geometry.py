@@ -97,6 +97,26 @@ def heading_kinks_deg(xs, zs):
     return np.degrees(np.abs(dh))
 
 
+def find_curvature_peaks(xs, zs, spacing=4.0, min_deg=3.0, min_separation_m=80.0):
+    """Local maxima of heading-change magnitude along a closed loop -- used
+    to synthesize "Turn N" corner markers when OSM has no (or too few)
+    named corners. Returns indices sorted by curvature magnitude (highest
+    first)."""
+    from scipy.signal import find_peaks
+
+    kink = heading_kinks_deg(xs, zs)
+    # smooth lightly so noisy single-sample spikes don't dominate
+    kink_s = periodic_gaussian_smooth(kink, sigma_samples=1.5)
+    distance = max(int(round(min_separation_m / spacing)), 1)
+    n = len(kink_s)
+    padded = np.concatenate([kink_s, kink_s, kink_s])
+    peaks, props = find_peaks(padded, height=min_deg, distance=distance)
+    peaks = [p - n for p in peaks if n <= p < 2 * n]
+    heights = [kink_s[p] for p in peaks]
+    order = np.argsort(heights)[::-1]
+    return [peaks[i] for i in order]
+
+
 def nearest_index(xs, ns, x0, n0):
     xs = np.asarray(xs)
     ns = np.asarray(ns)

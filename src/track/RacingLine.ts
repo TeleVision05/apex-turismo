@@ -27,7 +27,7 @@ export class RacingLine {
     this.curvature = new Float32Array(n);
     this.computeCurvature();
     this.speed = new Float32Array(n);
-    this.computeSpeeds(1.25, 9.5, 5.5, 95);
+    this.computeSpeeds(1.38, 10.5, 6, 100);
   }
 
   /**

@@ -156,7 +156,7 @@ export class CarVisual {
   enableHeadlamps(spec: CarSpec): void {
     if (this.headlamps.length) return;
     for (const side of [-1, 1]) {
-      const light = new SpotLight(0xe8f0ff, 60, 90, 0.5, 0.6, 1.4);
+      const light = new SpotLight(0xe8f0ff, 400, 140, 0.55, 0.5, 1.2);
       light.position.set(side * spec.widthM * 0.35, 0.7, -spec.lengthM * 0.45);
       light.target.position.set(side * spec.widthM * 0.2, 0.2, -spec.lengthM * 0.45 - 40);
       light.castShadow = false;

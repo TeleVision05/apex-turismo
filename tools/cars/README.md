@@ -27,7 +27,8 @@ only - never run against a live GUI session.
 | file | responsibility |
 |---|---|
 | `specs.py` | the `CarSpec` dict for each of the 9 roster cars |
-| `body.py` | body/glass/pillar geometry - the three-view boolean method (see below) |
+| `curves.py` | damped Catmull-Rom spline + rounded-section builders, shared by the body and greenhouse lofts |
+| `body.py` | body/glass/pillar geometry - the deterministic rounded-section loft (see below) |
 | `wheels.py` | tyre+rim wheel objects and static brake disc/caliper objects |
 | `details.py` | lights, mirrors, grille, splitter/diffuser, wing, exhaust, interior, steering wheel |
 | `materials.py` | the fixed Principled BSDF material set |
@@ -38,46 +39,49 @@ only - never run against a live GUI session.
 
 ## How the body is built
 
-A single hand-lofted cross-section sweep turned out to be brittle - a small
-sign error in one station's control point cascades into a self-intersecting
-panel, and every fix to the shape was a fresh opportunity for a new one. The
-body is instead built as a **three-view intersection**, which is what car
-stylists' blueprints already are:
+An earlier version tried both a single hand-lofted cross-section sweep and
+a pure three-view boolean intersection; the first self-intersected at the
+bumpers, the second gave a clean block with no windscreen rake or roofline
+("a bathtub on a slab"). The body is now a **deterministic rounded-section
+loft**, driven entirely by tunable keypoint tables (`specs.get_profile`):
 
-1. Three 2D silhouettes are defined straight from the `CarSpec` - a **side**
-   profile (Y-Z: bumpers, hood, cowl, roof, deck), a **plan** profile (X-Y:
-   nose taper, fender bulges, door width, tail taper) and a **front**
-   profile (X-Z: a constant rounded-shoulder/tumblehome cross-section).
-   Each is a small set of control points run through a Catmull-Rom spline
-   (`body._catmull_rom_chain`) to ~80-100 points - smooth curves, not a
-   straight-edged polygon.
-2. Each silhouette is extruded into a slab along the axis it doesn't
-   describe (side -> sweep X, plan -> sweep Z, front -> sweep Y), and the
-   three slabs are boolean-**INTERSECT**ed (`body.boolean_op`, EXACT
-   solver). Whatever survives all three cuts is the car mass - no per
-   -station formula, so nothing can fold back on itself.
-3. Wheel arches are cut with a boolean **DIFFERENCE** against a cylinder
-   through each axle. Window apertures are cut the same way, using one box
-   per glazing bay (windscreen / front door / rear quarter / backlight);
-   the bays stop short of each other by a pillar-width gap so the body
-   stays solid there (that solid strip *is* the A/B/C pillar).
-4. A Bevel modifier (5 segments, 35° angle limit) softens every cut and
-   panel edge, followed by one level of Subdivision - by the time it runs
-   the control cage is already the right shape, so it rounds shoulders
-   without turning into the old "lumpy blob".
-5. Glass is a *second*, independent set of thin panels sampled from the
-   same side/plan curves per glazing bay (inset ~3.5cm, recessed 6-8mm) -
-   it never touches the boolean solid, so it can't be dragged into a bad
-   shape by it. Thin Trim boxes at each pillar gap read as the window
-   surrounds so the greenhouse doesn't look like one glass blob.
-6. Wheel-position and body-relative detail placement (lights, mirrors,
-   grille, bumper lips) all query `body.local_size_at(curves, y)`, which
-   samples the same side/plan curves the body was built from, instead of
-   re-deriving the silhouette from the spec - so details stay flush with
-   whatever the boolean actually produced.
+1. Five profile functions of longitudinal position x (0 = nose, L = tail):
+   `w(x)` plan half-width, `zf(x)` floor height, `zt(x)` lower-body top
+   (hood -> belt -> deck line), `rt(x)` top corner radius - each a short
+   keypoint table run through a damped Catmull-Rom spline (`curves.py`,
+   tension 0.5) and sampled every 0.04 m. `rb` (rocker radius) is a
+   constant. A `zr(x)` roof curve (cosine ease onto/off a flat roof at
+   height H) drives the greenhouse.
+2. Every station is the *same* 28-point rounded-rectangle cross-section
+   (`curves.rounded_trapezoid_section`) - 4 corner arcs + 4 edge midpoints,
+   the top one carrying a slight crown - just with different w/zf/zt/rt.
+   Identical topology at every station means the loft cannot fold back on
+   itself. Consecutive stations are bridged with quads, the two ends
+   capped with an n-gon, then Bevel (0.03 m, 2 segments) + one Subdivision
+   level.
+3. Wheel arches are a boolean difference per wheel (cylinder, radius
+   `wheelRadius+0.05`), not baked into the profile, plus a partial-torus
+   lip in Paint (left open at the bottom ~80 deg so it can't dip below the
+   ground). The cutter and the wheel hub share one lateral-offset formula
+   (`body.wheel_lateral_offset`) so the wheel is always centred in its arch.
+4. The greenhouse is an independent rounded-trapezoid loft from `xa`
+   (windscreen base) to `xc` (backlight base): wide base sunk 4 cm into
+   the belt, narrower rounded top riding `zr(x)`. Its own top-facing
+   faces (>60 deg from horizontal) are re-tagged Paint by face normal so
+   the roof reads as sheet metal; the rest stays Glass. A/B/C pillars are
+   separate boxes that run only from `zt(x)` to `zr(x)` **at that same x**
+   and are rotated to the local roof-curve slope, so they can never rise
+   above the roof.
+5. Detail placement (lights, mirrors, grille, bumper lips, wing) queries
+   `body.size_at_y()` / the same `zt`/`zr` curves the loft was built from,
+   so it stays flush with whatever the loft actually produced - the rear
+   wing's uprights, in particular, start exactly on `zt(x)` at the wing's
+   own position, so it can't float clear of the deck.
 
-Wheels are unrelated geometry (hub-centred tyre+rim revolve, `wheels.py`)
-and are simply positioned at the four hub points.
+Preview renders recolour `Paint` to a mid blue (#2a5fb8) and use a
+1.2 m eye-height camera at a 30 deg azimuth so the shape reads like a
+photo, not a lit turntable render; the exported GLB always keeps the
+white `Paint` the contract calls for.
 
 ## Deliberate deviations from the brief
 

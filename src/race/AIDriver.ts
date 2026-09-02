@@ -30,7 +30,7 @@ export class AIDriver {
     const s = vehicle.spec;
     const grip = vehicle.tyres.mu * 0.97;
     const aero = (s.downforceFront + s.downforceRear) * s.downforceMul;
-    this.carFactor = Math.sqrt(grip / 1.25) * (1 + Math.min(0.12, aero * 0.02));
+    this.carFactor = Math.sqrt(grip / 1.38) * (1 + Math.min(0.14, aero * 0.025));
   }
 
   update(dt: number, others: Vehicle[], out: InputState): void {

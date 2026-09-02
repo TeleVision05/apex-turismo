@@ -88,16 +88,16 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
   night: {
     elevationDeg: -8,
     azimuthDeg: 30,
-    sunIntensity: 0.25,
+    sunIntensity: 0.55,
     sunColor: '#8fa8ff',
-    ambient: 0.05,
-    hemiSky: '#1a2040',
-    hemiGround: '#050508',
-    fogColor: '#05070f',
+    ambient: 0.1,
+    hemiSky: '#2a3a6a',
+    hemiGround: '#0a0c12',
+    fogColor: '#070a14',
     fogDensity: 0.0016,
     turbidity: 2,
     rayleigh: 0.3,
-    exposure: 0.5,
+    exposure: 0.75,
   },
 };
 
@@ -159,7 +159,7 @@ export class SceneRenderer {
         )
         .replace(
           'gl_FragColor = vec4( texColor, 1.0 );',
-          'gl_FragColor = vec4( texColor * skyScale, 1.0 );',
+          'gl_FragColor = vec4( min( texColor * skyScale, vec3( 2.2 ) ), 1.0 );',
         );
     };
     this.scene.add(this.sky);
@@ -200,7 +200,7 @@ export class SceneRenderer {
     );
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(size as unknown as import('three').Vector2, 0.12, 0.45, 1.6);
+    this.bloom = new UnrealBloomPass(size as unknown as import('three').Vector2, 0.12, 0.4, 2.0);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(new SMAAPass());
@@ -235,7 +235,7 @@ export class SceneRenderer {
     this.sun.visible = p.elevationDeg > -3 || true;
     this.hemi.color.set(p.hemiSky);
     this.hemi.groundColor.set(p.hemiGround);
-    this.hemi.intensity = overcast ? 0.45 : 0.3;
+    this.hemi.intensity = this.timeOfDay === 'night' ? 0.5 : overcast ? 0.45 : 0.3;
     this.ambient.intensity = p.ambient * (overcast ? 1.4 : 1);
     const fogColor = new Color(p.fogColor);
     if (overcast) fogColor.multiplyScalar(0.8);
