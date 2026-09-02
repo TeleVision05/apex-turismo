@@ -161,20 +161,22 @@ def build_brake(name, radius):
 
 def build_all_wheels(spec, materials):
     """Return dict name -> object for the 4 wheels and 4 brakes, positioned
-    at their hub world locations (not parented yet)."""
+    at their hub world locations (not parented yet). The lateral offset
+    matches body.wheel_lateral_offset() exactly - the wheel arch is cut
+    around this same y - so the wheel is always centred in its arch."""
+    import body
     r = spec["wheel_radius"]
     tw = spec["tyre_width"]
     wb = spec["wheelbase"]
-    tf = spec["track_front"]
-    tr = spec["track_rear"]
+    lat = body.wheel_lateral_offset(spec)
     y_front = wb / 2.0
     y_rear = -wb / 2.0
 
     positions = {
-        "Wheel_FL": (-tf / 2.0, y_front, r),
-        "Wheel_FR": (tf / 2.0, y_front, r),
-        "Wheel_RL": (-tr / 2.0, y_rear, r),
-        "Wheel_RR": (tr / 2.0, y_rear, r),
+        "Wheel_FL": (-lat, y_front, r),
+        "Wheel_FR": (lat, y_front, r),
+        "Wheel_RL": (-lat, y_rear, r),
+        "Wheel_RR": (lat, y_rear, r),
     }
     result = {}
     for name, pos in positions.items():

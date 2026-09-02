@@ -109,7 +109,7 @@ def _light_pair(style, y, z, half_w, depth, mat, name_prefix):
 
 def build_headlights(spec, curves, bounds, materials):
     y = bounds["y_front_bump"] - 0.08
-    half_w, top = body.local_size_at(curves, y)
+    half_w, top = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.90
     z = top * 0.72
     return _light_pair(spec["headlight_style"], y + 0.05, z, hw, 0.06,
@@ -119,7 +119,7 @@ def build_headlights(spec, curves, bounds, materials):
 def build_taillights(spec, curves, bounds, materials):
     style = spec["headlight_style"] if spec["headlight_style"] == "quad_round" else "wedge"
     y = bounds["y_rear_bump"] + 0.08
-    half_w, top = body.local_size_at(curves, y)
+    half_w, top = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.90
     z = top * 0.62
     return _light_pair(style, y - 0.05, z, hw, 0.05, materials["Taillight"], "Taillight")
@@ -127,7 +127,7 @@ def build_taillights(spec, curves, bounds, materials):
 
 def build_brakelights(spec, curves, bounds, materials):
     y = bounds["y_rear_bump"] + 0.08
-    half_w, top = body.local_size_at(curves, y)
+    half_w, top = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.90
     z = top * 0.62
     objs = []
@@ -140,8 +140,8 @@ def build_brakelights(spec, curves, bounds, materials):
 def build_mirrors(spec, curves, bounds, materials):
     if spec.get("mirror_style", "door") == "none":
         return []
-    y = bounds["y_cowl"] - 0.18
-    belt_x, _ = body.local_size_at(curves, y)
+    y = body.blender_y(curves["xa"], bounds) - 0.18
+    belt_x, _ = body.size_at_y(curves, bounds, y)
     belt_z = body.belt_z_of(spec)
     objs = []
     for side, sx in (("L", -1), ("R", 1)):
@@ -154,7 +154,7 @@ def build_mirrors(spec, curves, bounds, materials):
 
 def build_grille(spec, curves, bounds, materials):
     y = bounds["y_front_bump"] - 0.10
-    half_w, _ = body.local_size_at(curves, y)
+    half_w, _ = body.size_at_y(curves, bounds, y)
     hw = half_w * 0.55
     z = spec["height"] * (0.30 if not spec.get("tall_grille") else 0.24)
     h = spec["height"] * (0.14 if not spec.get("tall_grille") else 0.24)
@@ -164,8 +164,8 @@ def build_grille(spec, curves, bounds, materials):
 def build_bumper_lips(spec, curves, bounds, materials):
     y_f = bounds["y_front_bump"] - 0.05
     y_r = bounds["y_rear_bump"] + 0.05
-    hw_f, _ = body.local_size_at(curves, y_f)
-    hw_r, _ = body.local_size_at(curves, y_r)
+    hw_f, _ = body.size_at_y(curves, bounds, y_f)
+    hw_r, _ = body.size_at_y(curves, bounds, y_r)
     return [
         _box_obj("BumperLip_F", (hw_f * 1.5, 0.04, 0.05),
                   (0, y_f - 0.02, spec["ground_clearance"] * 0.55), materials["Trim"]),
@@ -174,13 +174,13 @@ def build_bumper_lips(spec, curves, bounds, materials):
     ]
 
 
-def build_splitter_diffuser(spec, bounds, materials):
+def build_splitter_diffuser(spec, curves, bounds, materials):
     objs = []
     hw = spec["width"] / 2
     if spec.get("splitter"):
-        objs.append(_box_obj("Splitter", (hw * 1.9, 0.20, 0.02),
-                              (0, bounds["y_front_bump"] + 0.08,
-                               spec["ground_clearance"] * 0.35),
+        zf0 = curves["zf"](0.0) - 0.02
+        objs.append(_box_obj("Splitter", (hw * 1.9, 0.20, 0.03),
+                              (0, bounds["y_front_bump"] + 0.08, zf0),
                               materials["Trim"]))
     if spec.get("diffuser"):
         n_fins = 5
@@ -193,40 +193,43 @@ def build_splitter_diffuser(spec, bounds, materials):
     return objs
 
 
-def build_wing(spec, bounds, materials):
+def build_wing(spec, curves, bounds, materials):
     """Returns (body_parts, trim_parts) - blade is Paint, uprights/endplates
-    and lip-style spoilers are Trim, per the 'merged into Body/Trim' note."""
+    and lip-style spoilers are Trim, per the 'merged into Body/Trim' note.
+    The uprights start ON the deck (zt at the wing's own x), not at a flat
+    spec constant, so the wing never floats clear of the body."""
     wing = spec.get("wing", "none")
     if wing == "none":
         return [], []
     hw = spec["width"] / 2
     y = bounds["y_rear_bump"] + 0.18
+    deck_z = body.size_at_y(curves, bounds, y)[1]
     if wing == "lip":
         trim = [_box_obj("Wing_lip", (hw * 1.6, 0.14, 0.02),
-                          (0, y, spec["rear_deck_height"] + 0.02), materials["Trim"])]
+                          (0, y, deck_z + 0.02), materials["Trim"])]
         return [], trim
     # gt3: blade + 2 uprights + 2 endplates. `span` is the wing's HALF-span
     # (kept a little inside the body's own half-width, like a real wing).
     span = hw * 0.86
-    height = spec["height"] * (0.30 if spec.get("wing_swanneck") else 0.24)
-    blade_z = spec["rear_deck_height"] + height
-    body = [_box_obj("Wing_blade", (span * 2, 0.22, 0.025), (0, y, blade_z),
-                      materials["Paint"])]
+    height = spec["height"] * (0.34 if spec.get("wing_swanneck") else 0.28)
+    blade_z = deck_z + height
+    body_parts = [_box_obj("Wing_blade", (span * 2, 0.22, 0.025), (0, y, blade_z),
+                            materials["Paint"])]
     trim = []
     for sx in (-1, 1):
         ux = sx * span * 0.75
         trim.append(_box_obj(f"Wing_upright_{sx}", (0.035, 0.10, height),
-                              (ux, y, spec["rear_deck_height"] + height / 2),
+                              (ux, y, deck_z + height / 2),
                               materials["Trim"]))
         trim.append(_box_obj(f"Wing_endplate_{sx}", (0.02, 0.26, height * 0.9),
                               (sx * span, y, blade_z), materials["Trim"]))
-    return body, trim
+    return body_parts, trim
 
 
 def build_exhaust(spec, bounds, materials):
     count = max(1, spec.get("exhaust_count", 1))
     hw = spec["width"] / 2 * 0.55
-    z = spec["ground_clearance"] * 0.7
+    z = 0.28
     y = bounds["y_rear_bump"] - 0.03
     objs = []
     for i in range(count):
@@ -243,10 +246,10 @@ def build_badge(spec, bounds, materials):
                            spec["height"] * 0.5), materials["Chrome"], axis='Y')]
 
 
-def build_interior(spec, bounds, materials):
+def build_interior(spec, curves, bounds, materials):
     mat = materials["Interior"]
-    y_cowl = bounds["y_cowl"]
-    y_trunk = bounds["y_trunk_start"]
+    y_cowl = body.blender_y(curves["xa"], bounds)
+    y_trunk = body.blender_y(curves["xc"], bounds)
     hw = spec["width"] / 2 * 0.85
     floor_z = spec["ground_clearance"] + 0.03
     objs = [
@@ -274,7 +277,7 @@ def build_interior(spec, bounds, materials):
     return objs
 
 
-def build_steering_wheel(spec, bounds, materials):
+def build_steering_wheel(spec, curves, bounds, materials):
     """Torus rim + 3 spokes. Local Z is the column axis (per the object's
     own rotation) so the game can spin it about local Z; tilted 25 deg."""
     mat = materials["Interior"]
@@ -314,6 +317,6 @@ def build_steering_wheel(spec, bounds, materials):
         p.use_smooth = True
 
     hw = spec["width"] / 2
-    obj.location = (-hw * 0.42, bounds["y_cowl"] + 0.30, spec["height"] * 0.44)
+    obj.location = (-hw * 0.42, body.blender_y(curves["xa"], bounds) + 0.10, spec["height"] * 0.44)
     obj.rotation_euler = (math.radians(25), 0, 0)
     return obj

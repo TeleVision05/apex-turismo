@@ -103,6 +103,7 @@ export class RaceRuntime {
     this.session = new RaceSession(track, config, entries, assists, transmission);
     this.camera = new CameraRig(renderer.camera);
     this.recorder = new ReplayRecorder(entries.length);
+    for (const m of trackScene.roadMeshes) m.receiveShadow = true;
     this.group.add(trackScene.group, this.skids.mesh, this.smoke.points);
   }
 

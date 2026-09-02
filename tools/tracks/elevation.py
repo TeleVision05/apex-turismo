@@ -52,6 +52,34 @@ def fetch_elevations(track_id, lats, lons, batch_size=100):
     return np.array(elevs, dtype=float)
 
 
+def fetch_elevations_strided(track_id, lats, lons, max_queries=120, batch_size=100):
+    """Query elevation at a coarser stride along the loop and linearly
+    (periodically) interpolate back up to full resolution.
+
+    Deviation from the literal spec (query every resampled point): the
+    source DEM is ~90 m resolution, so querying every 4 m point is heavy
+    oversampling of the same underlying pixels, and Open-Meteo's free tier
+    has a per-hour request cap that a dozen 1450-point tracks blows through
+    fast (hit during this build on 2026-09-01: "Hourly API request limit
+    exceeded"). Striding to ~max_queries points per track and interpolating
+    keeps the elevation signal (which gets Gaussian-smoothed with sigma=25m
+    anyway) effectively identical while cutting requests ~10x.
+    """
+    n = len(lats)
+    stride = max(1, n // max_queries)
+    idx = np.arange(0, n, stride)
+    if idx[-1] != n - 1:
+        idx = np.append(idx, n - 1)
+    sample_elevs = fetch_elevations(track_id, lats[idx], lons[idx], batch_size=batch_size)
+
+    # periodic linear interpolation back to every index 0..n-1
+    idx_ext = np.append(idx, idx[0] + n)
+    elev_ext = np.append(sample_elevs, sample_elevs[0])
+    full_idx = np.arange(n)
+    full = np.interp(full_idx, idx_ext, elev_ext)
+    return full
+
+
 def process_elevation(raw_elevs, spacing_m=4.0, sigma_m=25.0, max_grade=0.12):
     """Smooth raw (noisy) elevations along the loop and clamp grade to
     max_grade, then subtract the minimum so the lowest point is y=0."""

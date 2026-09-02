@@ -1,7 +1,11 @@
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  BackSide,
   Color,
+  Mesh,
+  ShaderMaterial,
+  SphereGeometry,
   DirectionalLight,
   Fog,
   HemisphereLight,
@@ -48,10 +52,10 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
     hemiSky: '#bcd4ff',
     hemiGround: '#5a5a40',
     fogColor: '#d9e2ee',
-    fogDensity: 0.0009,
+    fogDensity: 0.0006,
     turbidity: 6,
-    rayleigh: 2.2,
-    exposure: 0.36,
+    rayleigh: 2.8,
+    exposure: 0.5,
   },
   noon: {
     elevationDeg: 58,
@@ -61,11 +65,11 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
     ambient: 0.12,
     hemiSky: '#a9c8ff',
     hemiGround: '#6b6b4a',
-    fogColor: '#dfe8f4',
-    fogDensity: 0.0005,
-    turbidity: 3,
-    rayleigh: 1.4,
-    exposure: 0.35,
+    fogColor: '#c9d8ea',
+    fogDensity: 0.00028,
+    turbidity: 4,
+    rayleigh: 2.6,
+    exposure: 0.5,
   },
   evening: {
     elevationDeg: 7,
@@ -79,7 +83,7 @@ const PRESETS: Record<TimeOfDay, LightingPreset> = {
     fogDensity: 0.0011,
     turbidity: 10,
     rayleigh: 3.5,
-    exposure: 0.4,
+    exposure: 0.55,
   },
   night: {
     elevationDeg: -8,
@@ -114,6 +118,7 @@ export class SceneRenderer {
   private envTexture: Texture | null = null;
   private settings: GraphicsSettings;
   private readonly sunDir = new Vector3();
+  private readonly skyScale = { value: 0.32 };
   private readonly pmrem: PMREMGenerator;
   timeOfDay: TimeOfDay = 'noon';
   weather: Weather = 'clear';
@@ -143,6 +148,20 @@ export class SceneRenderer {
     this.scene.add(this.hemi, this.ambient);
     this.sky = new Sky();
     this.sky.scale.setScalar(450000);
+    // the physical sky is far brighter than the rest of the scene; scale its output down
+    const skyMat = this.sky.material;
+    skyMat.onBeforeCompile = (shader) => {
+      shader.uniforms.skyScale = this.skyScale;
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'uniform float mieDirectionalG;',
+          'uniform float mieDirectionalG;\nuniform float skyScale;',
+        )
+        .replace(
+          'gl_FragColor = vec4( texColor, 1.0 );',
+          'gl_FragColor = vec4( texColor * skyScale, 1.0 );',
+        );
+    };
     this.scene.add(this.sky);
     this.pmrem = new PMREMGenerator(this.renderer);
     this.applySettings(settings);
@@ -181,7 +200,7 @@ export class SceneRenderer {
     );
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(size as unknown as import('three').Vector2, 0.15, 0.5, 3.0);
+    this.bloom = new UnrealBloomPass(size as unknown as import('three').Vector2, 0.12, 0.45, 1.6);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(new SMAAPass());
@@ -221,18 +240,52 @@ export class SceneRenderer {
     const fogColor = new Color(p.fogColor);
     if (overcast) fogColor.multiplyScalar(0.8);
     const density = p.fogDensity * (weather === 'rain' ? 2.4 : overcast ? 1.6 : 1);
-    this.scene.fog = new Fog(fogColor, 80, Math.min(4000, 1.6 / density));
+    this.scene.fog = new Fog(fogColor, 120, Math.min(7000, 1.8 / density));
     this.scene.background = null;
     this.renderer.toneMappingExposure = p.exposure * (overcast ? 0.9 : 1);
     this.buildEnvironment();
   }
 
+  /**
+   * Image-based lighting comes from a small gradient dome with sane radiance
+   * (the physical sky is far too bright to use directly), plus a sun blob so
+   * car paint picks up a highlight.
+   */
   private buildEnvironment(): void {
     this.envTexture?.dispose();
-    const rt = this.pmrem.fromScene(this.sky as unknown as Scene, 0.02, 1, 1000);
+    const p = PRESETS[this.timeOfDay];
+    const overcast = this.weather !== 'clear';
+    const envScene = new Scene();
+    const top = new Color(p.hemiSky).multiplyScalar(overcast ? 0.55 : 0.75);
+    const horizon = new Color(p.fogColor).multiplyScalar(overcast ? 0.6 : 0.85);
+    const ground = new Color(p.hemiGround).multiplyScalar(0.5);
+    const dome = new Mesh(
+      new SphereGeometry(50, 32, 16),
+      new ShaderMaterial({
+        side: BackSide,
+        uniforms: {
+          top: { value: top },
+          horizon: { value: horizon },
+          ground: { value: ground },
+          sunDir: { value: this.sunDir.clone() },
+          sunColor: {
+            value: new Color(p.sunColor).multiplyScalar(overcast ? 1.5 : p.sunIntensity * 2.5),
+          },
+        },
+        vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+        fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 ground; uniform vec3 sunDir; uniform vec3 sunColor; varying vec3 vDir;
+          void main(){ float y = vDir.y; vec3 c = y > 0.0 ? mix(horizon, top, pow(y, 0.6)) : mix(horizon, ground, pow(-y, 0.5));
+          float s = max(dot(normalize(vDir), normalize(sunDir)), 0.0); c += sunColor * pow(s, 400.0) + sunColor * 0.04 * pow(s, 8.0);
+          gl_FragColor = vec4(c, 1.0); }`,
+      }),
+    );
+    envScene.add(dome);
+    const rt = this.pmrem.fromScene(envScene, 0.04, 1, 100);
+    dome.geometry.dispose();
+    (dome.material as ShaderMaterial).dispose();
     this.envTexture = rt.texture;
     this.scene.environment = this.envTexture;
-    this.scene.environmentIntensity = this.timeOfDay === 'night' ? 0.25 : 0.3;
+    this.scene.environmentIntensity = this.timeOfDay === 'night' ? 0.5 : 1;
   }
 
   /** Keeps the shadow frustum centred on the point of interest (the player's car). */

@@ -26,7 +26,7 @@ from stitch import (
     START_WAY_RE,
 )
 from geometry import resample_closed_loop, signed_area_xn, heading_kinks_deg, nearest_index
-from elevation import fetch_elevations, process_elevation
+from elevation import fetch_elevations_strided, process_elevation
 from pitlane import build_pit_lane
 from plotting import plot_track
 
@@ -127,7 +127,7 @@ def build_one(spec):
     start_idx = 0
 
     lats, lons = _inverse_project(xs_r, ns_r, origin)
-    raw_elev = fetch_elevations(tid, lats, lons)
+    raw_elev = fetch_elevations_strided(tid, lats, lons)
     ys_r = process_elevation(raw_elev, spacing_m=4.0)
 
     loop_node_set = set(loop_nodes)

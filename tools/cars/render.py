@@ -63,16 +63,20 @@ def _add_camera(name, location, target):
 
 def render_views(spec, out_dir, car_id):
     from mathutils import Vector
-    L, W, H = spec["length"], spec["width"], spec["height"]
-    centre = Vector((0, 0, H * 0.42))
-    dist = L * 1.35
+    L, H = spec["length"], spec["height"]
+    centre = Vector((0, 0, H * 0.45))
+    dist = L * 1.25
+    eye_z = 1.2  # human eye height, not scaled by car height - a ground
+    # -level "photo" reads far less toy-like than a high overhead camera.
+    az = math.radians(30)
 
     # nose points +Y, so the front three-quarter camera must sit on the +Y
-    # side (in front of the car, looking back at the nose).
+    # side (in front of the car, looking back at the nose), 30 deg off the
+    # nose-on axis.
     views = {
-        "front34": Vector((dist * 0.62, dist * 0.85, H * 1.15)),
-        "rear34": Vector((dist * 0.62, -dist * 0.85, H * 1.15)),
-        "side": Vector((dist * 1.05, 0.0, H * 0.75)),
+        "front34": Vector((dist * math.sin(az), dist * math.cos(az), eye_z)),
+        "rear34": Vector((dist * math.sin(az), -dist * math.cos(az), eye_z)),
+        "side": Vector((dist * 1.05, 0.0, eye_z)),
     }
     scene = bpy.context.scene
     paths = {}

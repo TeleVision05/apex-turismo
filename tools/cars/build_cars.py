@@ -25,6 +25,13 @@ MODELS_DIR = os.path.join(REPO_ROOT, "public", "models", "cars")
 PREVIEW_DIR = os.path.join(SCRIPT_DIR, "previews")
 
 
+def _set_preview_paint_color(paint_mat, rgb255):
+    srgb = [c / 255.0 for c in rgb255]
+    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
+    bsdf = paint_mat.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Base Color"].default_value = (*linear, 1.0)
+
+
 def _finalize_group(obj, mat):
     """Every join_group() result can carry a phantom empty material slot
     from whatever boolean/bevel ops its parts went through - pin it down
@@ -36,11 +43,13 @@ def _finalize_group(obj, mat):
     return obj
 
 
-def _build_body_and_glass(spec, bounds, mats):
+def _build_body_and_glass(spec, curves, bounds, mats):
     body_obj = body.build_body(spec, bounds, mats)
     glass_obj = body.build_glass(spec, bounds, mats)
     pillar_parts = body.build_pillars(spec, bounds, mats)
-    wing_body, wing_trim = details.build_wing(spec, bounds, mats)
+    for p in pillar_parts:
+        p.data.materials.append(mats["Trim"])
+    wing_body, wing_trim = details.build_wing(spec, curves, bounds, mats)
     if wing_body:
         body_obj = export_mod.join_group([body_obj] + wing_body, "Body")
         _finalize_group(body_obj, mats["Paint"])
@@ -51,7 +60,7 @@ def _build_detail_groups(spec, curves, bounds, mats, pillar_parts, wing_trim):
     trim_parts = (details.build_mirrors(spec, curves, bounds, mats)
                   + details.build_grille(spec, curves, bounds, mats)
                   + details.build_bumper_lips(spec, curves, bounds, mats)
-                  + details.build_splitter_diffuser(spec, bounds, mats)
+                  + details.build_splitter_diffuser(spec, curves, bounds, mats)
                   + wing_trim + pillar_parts)
     trim_obj = _finalize_group(export_mod.join_group(trim_parts, "Trim"), mats["Trim"])
 
@@ -68,7 +77,7 @@ def _build_detail_groups(spec, curves, bounds, mats, pillar_parts, wing_trim):
         export_mod.join_group(details.build_brakelights(spec, curves, bounds, mats), "Brakelights"),
         mats["Brakelight"])
     interior_obj = _finalize_group(
-        export_mod.join_group(details.build_interior(spec, bounds, mats), "Interior"),
+        export_mod.join_group(details.build_interior(spec, curves, bounds, mats), "Interior"),
         mats["Interior"])
 
     return dict(trim=trim_obj, chrome=chrome_obj, headlights=headlight_obj,
@@ -82,9 +91,9 @@ def build_one_car(car_id, do_render=True):
 
     bounds = body.compute_bounds(spec)
     curves = body.get_curves(spec, bounds)
-    body_obj, glass_obj, pillar_parts, wing_trim = _build_body_and_glass(spec, bounds, mats)
+    body_obj, glass_obj, pillar_parts, wing_trim = _build_body_and_glass(spec, curves, bounds, mats)
     groups = _build_detail_groups(spec, curves, bounds, mats, pillar_parts, wing_trim)
-    steering_obj = details.build_steering_wheel(spec, bounds, mats)
+    steering_obj = details.build_steering_wheel(spec, curves, bounds, mats)
     wb = wheels.build_all_wheels(spec, mats)
 
     root = export_mod.build_hierarchy(
@@ -104,6 +113,10 @@ def build_one_car(car_id, do_render=True):
     preview_paths = {}
     if do_render:
         os.makedirs(PREVIEW_DIR, exist_ok=True)
+        # the exported GLB above already has white Paint; only the *preview*
+        # material is recoloured, so shape reads clearly against the grey
+        # studio backdrop without touching what ships to the game.
+        _set_preview_paint_color(mats["Paint"], (0x2a, 0x5f, 0xb8))
         render_mod.setup_studio(spec)
         preview_paths = render_mod.render_views(spec, PREVIEW_DIR, car_id)
 
