@@ -1,0 +1,484 @@
+/* Reusable widgets: buttons, field rows (cycle/slider/toggle), list rows,
+   pills, chips, swatches, notices, toast. Rectangular, condensed, one accent. */
+
+/* ---------- Icons (used sparingly — home menu + top bar only) ---------- */
+
+.gt-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+
+/* ---------- Buttons ---------- */
+
+.gt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 11px 20px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    color var(--dur-fast) linear;
+}
+
+.gt-btn-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.gt-btn-label {
+  line-height: 1;
+}
+
+.gt-btn:hover,
+.gt-btn.focused {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gt-btn.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.gt-btn.primary:hover,
+.gt-btn.primary.focused {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-text);
+}
+
+.gt-btn.danger {
+  border-color: rgba(225, 6, 0, 0.4);
+  color: var(--text-dim);
+}
+
+.gt-btn.danger:hover,
+.gt-btn.danger.focused {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.gt-btn.disabled,
+.gt-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ---------- Field rows (cycle / slider / toggle) ---------- */
+
+.gt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+
+.gt-row.focused,
+.gt-row:hover {
+  background: var(--bg-1);
+  border-left-color: var(--accent);
+}
+
+.gt-row.disabled {
+  opacity: 0.4;
+}
+
+.gt-row.disabled .gt-row-hint {
+  color: var(--text-dim);
+}
+
+.gt-row-label {
+  font-size: 14px;
+  color: var(--text-dim);
+  flex: 1 1 auto;
+}
+
+.gt-row-value {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.gt-row-hint {
+  font-size: 12px;
+  color: var(--text-dimmer);
+  margin-top: 2px;
+}
+
+/* Nested inside a .gt-row (a row-direction flex box) this wraps onto its own
+   full-width line below the label/value pair. As a standalone child of a
+   column flex container (.form-rows) it must NOT inherit flex-basis: 100%,
+   which would ask for 100% of the column's height instead of its width. */
+.gt-row > .gt-row-hint {
+  flex-basis: 100%;
+}
+
+.gt-arrow {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.gt-arrow:hover {
+  color: var(--accent);
+}
+
+.gt-cycle-text {
+  min-width: 6em;
+  text-align: center;
+  color: var(--text);
+}
+
+.gt-slider-track {
+  display: flex;
+  align-items: center;
+  width: clamp(90px, 12vw, 160px);
+}
+
+.gt-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  border-radius: 0;
+  background: var(--line-strong);
+  outline: none;
+}
+
+.gt-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.gt-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+
+.gt-slider-readout {
+  min-width: 3.5em;
+  text-align: right;
+  color: var(--text);
+}
+
+.gt-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  cursor: pointer;
+  padding: 0;
+}
+
+.gt-swatch.selected,
+.gt-swatch.focused {
+  border-color: var(--accent);
+}
+
+.swatch-row {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+
+/* ---------- Section label (grouping header inside a list) ---------- */
+
+.section-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dimmer);
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+
+.section-label:first-child {
+  margin-top: 0;
+}
+
+/* ---------- List rows (garage / dealership / events / records) ---------- */
+
+.list-row {
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  padding-left: var(--sp-3);
+  margin-left: -3px;
+  cursor: pointer;
+  transition: background var(--dur-fast) linear;
+}
+
+.list-row.focused,
+.list-row:hover {
+  background: var(--bg-1);
+  border-left-color: var(--accent);
+}
+
+.list-row.selected .card-title {
+  color: var(--accent);
+}
+
+.list-row.locked,
+.list-row.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.list-row .card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.list-row .card-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.list-row .card-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.list-row .card-meta {
+  display: flex;
+  gap: var(--sp-4);
+  font-size: 12px;
+  color: var(--text-dimmer);
+  margin-top: var(--sp-1);
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Pills / badges (one style: thin outline text) ---------- */
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pill.pp {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.pill.owned {
+  color: var(--good);
+  border-color: rgba(62, 207, 110, 0.4);
+}
+
+.pill.locked {
+  color: var(--text-dimmer);
+}
+
+.pill.class {
+  color: var(--accent);
+  border-color: rgba(225, 6, 0, 0.45);
+}
+
+/* ---------- Class filter chips (dealership) ---------- */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+}
+
+.chip {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    background var(--dur-fast) linear;
+}
+
+.chip:hover,
+.chip.focused {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/* ---------- Stat grid ---------- */
+
+.stat-card {
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--line);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-3) var(--sp-5);
+  margin-top: var(--sp-2);
+}
+
+.stat-item .stat-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dimmer);
+}
+
+.stat-item .stat-value {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Notices ---------- */
+
+.notice {
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--line-strong);
+  font-size: 13px;
+  margin: var(--sp-2) 0;
+  color: var(--text-dim);
+}
+
+.notice.error {
+  border-left-color: var(--accent);
+  color: var(--text);
+}
+
+.notice.info {
+  border-left-color: var(--line-strong);
+  color: var(--text-dim);
+}
+
+/* ---------- Confirm steps (sell / reset) ---------- */
+
+.confirm-box {
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--line);
+  margin-top: var(--sp-2);
+}
+
+.confirm-box .confirm-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: var(--sp-3);
+}
+
+/* ---------- Form layout ---------- */
+
+.form-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.subsection {
+  margin-top: var(--sp-5);
+}
+
+.subsection:first-child {
+  margin-top: 0;
+}
+
+/* ---------- Toast ---------- */
+
+.toast-layer {
+  position: absolute;
+  top: var(--sp-5);
+  right: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  z-index: 50;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg-scrim-strong);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 13px;
+  opacity: 0;
+  transform: translateX(10px);
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.toast.shown {
+  opacity: 1;
+  transform: translateX(0);
+}

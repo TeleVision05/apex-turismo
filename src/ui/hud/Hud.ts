@@ -44,10 +44,9 @@ export class Hud {
     this.el = el('div', 'hud-layer');
     this.el.append(
       this.buildTopLeft(),
-      this.buildTopCenter(),
+      this.buildTopRight(),
       this.buildGaps(),
       this.buildBottomRight(),
-      this.buildAssists(),
       this.centerMessage,
       this.minimap.el,
       this.buildStandings(),
@@ -58,12 +57,12 @@ export class Hud {
     const box = el('div', 'hud-top-left');
     const pos = el('div', 'hud-position');
     pos.append(this.position, this.totalCars);
-    box.append(pos, this.lapEl);
+    box.append(pos, this.lapEl, this.buildAssists());
     return box;
   }
 
-  private buildTopCenter(): HTMLElement {
-    const box = el('div', 'hud-top-center');
+  private buildTopRight(): HTMLElement {
+    const box = el('div', 'hud-top-right');
     const row = el('div', 'hud-time-row');
     row.append(this.lastTime, this.bestTime, this.delta);
     const sectorRow = el('div', 'hud-sectors');

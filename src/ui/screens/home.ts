@@ -1,12 +1,12 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtPP } from '../format';
-import { makeTile } from '../widgets';
+import { makeMenuItem } from '../widgets';
 import { icon } from '../icons';
 import type { IconName } from '../icons';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 
-interface TileDef {
+interface MenuItemDef {
   icon: IconName;
   title: string;
   desc: string;
@@ -36,12 +36,12 @@ function buildTopBar(): TopBar {
   wordmark.appendChild(icon('emblem', 'wordmark-emblem'));
   wordmark.appendChild(el('span', 'wordmark-text', 'APEX TURISMO'));
 
-  const credits = el('div', 'credits', '');
+  const credits = el('div', 'credits tnum', '');
   const creditsBlock = el('div', 'credits-block');
-  creditsBlock.append(icon('coin', 'credits-icon'), credits);
+  creditsBlock.appendChild(credits);
 
   const carName = el('div', 'car-name', '');
-  const carPp = el('div', 'car-pp', '');
+  const carPp = el('div', 'car-pp tnum', '');
   const carBlock = el('div', 'car-block');
   carBlock.append(carName, carPp);
 
@@ -57,13 +57,13 @@ function buildTopBar(): TopBar {
 
 function buildTicker(): { el: HTMLElement; text: HTMLElement } {
   const ticker = el('div', 'home-ticker');
-  ticker.appendChild(icon('sliders', 'home-ticker-icon'));
+  ticker.appendChild(el('div', 'overline home-ticker-label', 'Driving tip'));
   const text = el('span', 'home-ticker-text', '');
   ticker.appendChild(text);
   return { el: ticker, text };
 }
 
-function tileDefs(ctx: ScreenContext): TileDef[] {
+function menuItemDefs(ctx: ScreenContext): MenuItemDef[] {
   return [
     {
       icon: 'world',
@@ -146,7 +146,7 @@ function showSelectedCar(ctx: ScreenContext): void {
   else ctx.facade.showroom(null);
 }
 
-/** Home / world map: a GT7-style tile grid plus the credits/car header bar. */
+/** Home: a vertical menu of large condensed labels over the showroom scene. */
 export function createHomeScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-home');
   const bg = el('div', 'home-bg-veil');
@@ -154,9 +154,9 @@ export function createHomeScreen(ctx: ScreenContext): Screen {
   const progressFill = el('div', 'home-progress-fill');
   progressTrack.appendChild(progressFill);
   const topBar = buildTopBar();
-  const tiles = el('div', 'home-tiles');
+  const menu = el('div', 'home-menu');
   const ticker = buildTicker();
-  root.append(bg, progressTrack, topBar.el, tiles, ticker.el);
+  root.append(bg, progressTrack, topBar.el, menu, ticker.el);
 
   let focusItems: FocusItem[] = [];
   let tickerTimer: number | null = null;
@@ -176,25 +176,22 @@ export function createHomeScreen(ctx: ScreenContext): Screen {
       rotateTip();
       if (tickerTimer !== null) window.clearInterval(tickerTimer);
       tickerTimer = window.setInterval(rotateTip, 6000);
-      tiles.classList.remove('sweep');
-      void tiles.offsetWidth;
-      tiles.classList.add('sweep');
     },
     onHide: () => {
       if (tickerTimer !== null) window.clearInterval(tickerTimer);
       tickerTimer = null;
     },
     render: () => {
-      clear(tiles);
+      clear(menu);
       renderHeader(topBar, ctx);
       renderProgress(progressFill, ctx);
       focusItems = [];
-      for (const t of tileDefs(ctx)) {
-        const w = makeTile(t.icon, t.title, t.desc, t.go);
-        tiles.appendChild(w.el);
+      for (const item of menuItemDefs(ctx)) {
+        const w = makeMenuItem(item.icon, item.title, item.desc, item.go);
+        menu.appendChild(w.el);
         focusItems.push(w.item);
       }
     },
-    focus: (): FocusPlan => ({ items: focusItems, columns: 3 }),
+    focus: (): FocusPlan => ({ items: focusItems }),
   };
 }

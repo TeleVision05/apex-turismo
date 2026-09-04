@@ -7,6 +7,8 @@
 export type Drivetrain = 'FR' | 'FF' | 'MR' | 'RR' | '4WD';
 export type CarClass = 'N100' | 'N200' | 'N300' | 'N500' | 'Gr.4' | 'Gr.3' | 'Gr.1';
 export type TyreCompound = 'comfort' | 'sport' | 'racing';
+/** Engine synthesis character for the audio engine; must match audio/EnginePresets.ts EngineKind exactly. */
+export type EngineKind = 'i4' | 'i6' | 'v6' | 'v8' | 'rotary' | 'flat6' | 'v8hybrid';
 
 /** A point on an engine torque curve. */
 export interface TorquePoint {
@@ -66,6 +68,8 @@ export interface CarSpec {
   steerLockDeg: number;
   /** starting tyre fitment */
   tyres: TyreCompound;
+  /** engine character used to pick an audio synthesis preset */
+  engine: EngineKind;
 }
 
 /** Per-car upgrades and settings that the player can change in the tuning shop. */

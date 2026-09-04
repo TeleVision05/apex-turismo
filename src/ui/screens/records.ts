@@ -1,18 +1,16 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
-import { makeScreenHeader } from '../widgets';
+import { makeMenuShell } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 
 /** Records: every saved best lap, sorted by track. */
 export function createRecordsScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-records');
-  const panel = el('div', 'side-panel panel');
-  panel.style.width = 'min(56vw, 680px)';
-  panel.appendChild(makeScreenHeader('trophy', 'Records'));
-  const body = el('div', 'side-panel-scroll');
-  panel.appendChild(body);
-  root.appendChild(panel);
+  const shell = makeMenuShell('Career', 'Records', { wide: true });
+  const body = el('div', 'menu-scroll');
+  shell.body.appendChild(body);
+  root.appendChild(shell.el);
 
   let focusItems: FocusItem[] = [];
 

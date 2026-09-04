@@ -179,7 +179,7 @@ export class CarVisual {
       if (!w) continue;
       this.wheelSpin[i] = (this.wheelSpin[i] + v.wheels[i].omega * dt) % (Math.PI * 2);
       w.rotation.x = this.wheelSpin[i];
-      w.rotation.y = i < 2 ? -v.steerAngle : 0;
+      w.rotation.y = -v.wheels[i].steer;
       // suspension travel relative to the rest position
       const travel = v.wheels[i].restCompression - v.wheels[i].compression;
       w.position.y = v.wheels[i].radius + travel;

@@ -1,0 +1,325 @@
+/* Race HUD: type on a subtle corner scrim, no rounded translucent boxes.
+   Anchored to corners/center so it survives 16:9 through 21:9. */
+
+.hud-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-display);
+  color: var(--text);
+  transition: opacity var(--dur-base) linear;
+  background:
+    radial-gradient(ellipse 440px 240px at 0% 0%, rgba(0, 0, 0, 0.38), transparent 70%),
+    radial-gradient(ellipse 440px 240px at 100% 0%, rgba(0, 0, 0, 0.38), transparent 70%),
+    radial-gradient(ellipse 440px 260px at 100% 100%, rgba(0, 0, 0, 0.38), transparent 70%),
+    radial-gradient(ellipse 320px 220px at 0% 100%, rgba(0, 0, 0, 0.34), transparent 70%);
+}
+
+.hud-layer * {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.hud-layer.hidden-hud {
+  display: none;
+}
+
+.hud-layer.dimmed {
+  opacity: 0.35;
+}
+
+/* ---------- Top-left: position, lap, assist/flag indicators ---------- */
+
+.hud-top-left {
+  position: absolute;
+  top: clamp(14px, 2.4vh, 24px);
+  left: clamp(14px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.hud-position {
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-position .of {
+  font-size: 15px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.hud-lap {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.hud-assists {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.hud-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  color: var(--text-dimmer);
+}
+
+.hud-badge.active {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.hud-badge.warn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- Top-right: current/last/best time, delta, sectors ---------- */
+
+.hud-top-right {
+  position: absolute;
+  top: clamp(14px, 2.4vh, 24px);
+  right: clamp(14px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-1);
+}
+
+.hud-current-time {
+  font-size: clamp(24px, 2.8vw, 32px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-time-row {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-delta {
+  padding: 1px 8px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-delta.negative {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.hud-delta.positive {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.hud-sectors {
+  display: flex;
+  gap: 4px;
+}
+
+.hud-sector {
+  width: 24px;
+  height: 3px;
+  background: var(--line-strong);
+}
+
+.hud-sector.set {
+  background: var(--good);
+}
+
+.hud-sector.slow {
+  background: var(--warn);
+}
+
+/* ---------- Top-center: gaps to cars ahead/behind ---------- */
+
+.hud-gaps {
+  position: absolute;
+  top: clamp(70px, 9vh, 92px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--sp-5);
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Bottom-right: speed, gear (largest numeral), rpm ---------- */
+
+.hud-bottom-right {
+  position: absolute;
+  bottom: clamp(14px, 2.4vh, 24px);
+  right: clamp(14px, 2.4vw, 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.hud-speed {
+  font-size: clamp(26px, 2.8vw, 34px);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.hud-speed .unit {
+  font-size: 12px;
+  color: var(--text-dimmer);
+  margin-left: 4px;
+}
+
+.hud-gear {
+  font-size: clamp(52px, 7vw, 84px);
+  font-weight: 700;
+  line-height: 0.9;
+  color: var(--text);
+}
+
+.hud-rpm-bar {
+  width: clamp(160px, 18vw, 220px);
+  height: 4px;
+  background: var(--line-strong);
+  overflow: hidden;
+  margin-top: var(--sp-2);
+  position: relative;
+}
+
+.hud-rpm-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: var(--accent);
+  transform: scaleX(0);
+}
+
+.hud-rpm-redline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(225, 6, 0, 0.32);
+}
+
+.hud-shift-light {
+  width: clamp(160px, 18vw, 220px);
+  height: 3px;
+  margin-top: 3px;
+  background: transparent;
+}
+
+.hud-shift-light.flash {
+  background: var(--accent);
+}
+
+/* ---------- Center messages (countdown / wrong way / flag text) ---------- */
+
+.hud-center-message {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.hud-center-message.countdown {
+  font-size: clamp(64px, 10vw, 120px);
+}
+
+.hud-center-message.flash {
+  animation: hudflash 0.6s steps(1) infinite;
+  color: var(--accent);
+}
+
+@keyframes hudflash {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.hud-message-text {
+  font-size: clamp(22px, 3vw, 32px);
+}
+
+/* ---------- Minimap ---------- */
+
+.hud-minimap {
+  position: absolute;
+  bottom: clamp(14px, 2.4vh, 24px);
+  left: clamp(14px, 2.4vw, 24px);
+  width: 220px;
+  height: 220px;
+}
+
+.hud-minimap canvas {
+  position: absolute;
+  inset: 0;
+  width: 220px;
+  height: 220px;
+}
+
+/* ---------- Standings overlay (held Tab) ---------- */
+
+.hud-standings {
+  position: absolute;
+  top: clamp(64px, 8vh, 84px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 460px);
+  padding: var(--sp-4);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.hud-standings table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.hud-standings th {
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 4px 6px;
+}
+
+.hud-standings td {
+  padding: 4px 6px;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-standings tr.is-player td {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .hud-gaps {
+    display: none;
+  }
+}

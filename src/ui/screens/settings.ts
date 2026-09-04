@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtPct, titleCase } from '../format';
-import { makeButton, makeCycle, makeScreenHeader, makeSlider, makeToggle } from '../widgets';
+import { makeButton, makeCycle, makeMenuShell, makeSlider, makeToggle } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { CameraMode, GraphicsSettings } from '../../core/types';
@@ -33,18 +33,15 @@ const TRANSMISSION_OPTIONS = [
 /** Settings: graphics, audio, assists, transmission/units/camera and controls. */
 class SettingsScreen implements Screen {
   readonly el: HTMLElement;
-  private body = el('div', 'side-panel-scroll form-rows');
+  private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private resetConfirm = false;
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-settings');
-    const panel = el('div', 'panel');
-    panel.style.cssText =
-      'position:absolute;top:clamp(16px,3vh,32px);left:clamp(16px,3vw,40px);bottom:clamp(16px,3vh,32px);' +
-      'width:min(48vw,600px);display:flex;flex-direction:column;padding:clamp(16px,2.4vh,28px);gap:6px;';
-    panel.append(makeScreenHeader('sliders', 'Settings'), this.body);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Options', 'Settings');
+    shell.body.appendChild(this.body);
+    this.el.appendChild(shell.el);
   }
 
   onShow(): void {

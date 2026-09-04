@@ -27,12 +27,32 @@ export function makeButton(
   return { el: btn, item: { el: btn, onConfirm: () => !btn.disabled && onClick() } };
 }
 
-/** The icon + uppercase-label row used at the top of every side/centre panel. */
-export function makeScreenHeader(iconName: IconName, text: string, className = ''): HTMLElement {
-  const header = el('div', `section-label screen-header ${className}`.trim());
-  header.appendChild(icon(iconName, 'screen-header-icon'));
-  header.appendChild(el('span', 'screen-header-text', text));
-  return header;
+export interface MenuShell {
+  /** Append this to the screen's root element. */
+  el: HTMLElement;
+  /** Append the screen's own content (lists, forms, detail panels) here. */
+  body: HTMLElement;
+}
+
+/**
+ * The full-height left menu column shared by every menu screen: a scrim over
+ * the 3D scene, a hairline right edge, and an overline + title header. Not a
+ * floating rounded panel.
+ */
+export function makeMenuShell(
+  section: string,
+  title: string,
+  opts?: { wide?: boolean },
+): MenuShell {
+  const root = el('div', 'menu-screen');
+  root.appendChild(el('div', 'menu-scrim'));
+  const col = el('div', `menu-col${opts?.wide ? ' wide' : ''}`);
+  const header = el('div', 'menu-header');
+  header.append(el('div', 'overline', section), el('h1', 'menu-title', title));
+  const body = el('div', 'menu-body');
+  col.append(header, body);
+  root.appendChild(col);
+  return { el: root, body };
 }
 
 function rowShell(label: string): { row: HTMLElement; value: HTMLElement } {
@@ -153,28 +173,35 @@ export function makeSwatch(color: string, selected: boolean, onSelect: () => voi
   return { el: btn, item: { el: btn, onConfirm: onSelect } };
 }
 
-/** A large glass tile for the home world-map grid. */
-export function makeTile(
+/** One row of the home screen's vertical menu: icon, condensed title, one-line description. */
+export function makeMenuItem(
   iconName: IconName,
   title: string,
   desc: string,
   onSelect: () => void,
 ): Widget {
-  const tile = el('button', 'gt-tile');
-  tile.appendChild(el('div', 'gt-tile-sweep'));
-  tile.appendChild(icon(iconName, 'gt-tile-icon'));
-  tile.appendChild(el('div', 'gt-tile-title', title));
-  tile.appendChild(el('div', 'gt-tile-desc', desc));
-  tile.addEventListener('click', onSelect);
-  return { el: tile, item: { el: tile, onConfirm: onSelect } };
+  const row = el('button', 'home-menu-item');
+  row.appendChild(icon(iconName, 'home-menu-item-icon'));
+  const text = el('div', 'home-menu-item-text');
+  text.append(el('div', 'home-menu-item-title', title), el('div', 'home-menu-item-desc', desc));
+  row.appendChild(text);
+  row.addEventListener('click', onSelect);
+  return { el: row, item: { el: row, onConfirm: onSelect } };
 }
 
-/** A selectable list card (garage car, dealership car, event, record row...). */
-export function makeCard(
+/** A hairline-separated list row (garage car, dealership car, event, record...). */
+export function makeListRow(
   className: string,
   onSelect?: () => void,
 ): { el: HTMLElement; item: FocusItem } {
-  const card = el('div', `gt-card ${className}`.trim());
-  if (onSelect) card.addEventListener('click', onSelect);
-  return { el: card, item: { el: card, onConfirm: onSelect ?? (() => undefined) } };
+  const row = el('div', `list-row ${className}`.trim());
+  if (onSelect) row.addEventListener('click', onSelect);
+  return { el: row, item: { el: row, onConfirm: onSelect ?? (() => undefined) } };
+}
+
+/** An outlined tab chip, e.g. the dealership class filter row. Part of focus navigation. */
+export function makeChip(label: string, active: boolean, onSelect: () => void): Widget {
+  const btn = el('button', `chip${active ? ' active' : ''}`, label);
+  btn.addEventListener('click', onSelect);
+  return { el: btn, item: { el: btn, onConfirm: onSelect } };
 }

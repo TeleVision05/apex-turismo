@@ -1,5 +1,5 @@
 import { el, clear } from '../dom';
-import { makeButton, makeScreenHeader } from '../widgets';
+import { makeButton, makeMenuShell } from '../widgets';
 import { ACTION_LABELS, KEYBOARD, MAPPABLE_ACTIONS } from '../../core/InputBindings';
 import { InputManager } from '../../core/Input';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
@@ -17,7 +17,7 @@ function keyLabel(code: string): string {
 /** Controls: connected devices, keyboard reference and a per-device remap wizard. */
 class ControlsScreen implements Screen {
   readonly el: HTMLElement;
-  private body = el('div', 'side-panel-scroll');
+  private body = el('div', 'menu-scroll');
   private overlay = el('div', 'capture-overlay hidden panel');
   private overlayText = el('div', 'capture-text', '');
   private devices: ConnectedDevice[] = [];
@@ -28,10 +28,9 @@ class ControlsScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-controls');
-    const panel = el('div', 'side-panel panel');
-    panel.style.width = 'min(56vw, 700px)';
-    panel.append(makeScreenHeader('gamepad', 'Controls'), this.body);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Input', 'Controls', { wide: true });
+    shell.body.appendChild(this.body);
+    this.el.appendChild(shell.el);
     this.overlay.append(
       this.overlayText,
       el('div', 'capture-hint', 'Move Back / press Backspace to cancel'),

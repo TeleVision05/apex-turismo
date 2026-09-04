@@ -1,0 +1,272 @@
+/* Structural layout: the left menu column shared by every menu screen, the
+   home top bar, and the home vertical menu + ticker. No floating rounded
+   panels — content sits in a full-height column on a left-to-right scrim
+   over the 3D scene, with a single hairline at the column's right edge. */
+
+/* ---------- Left menu column (dealership/garage/tuning/events/custom/
+   timetrial/settings/controls/records) ---------- */
+
+.menu-screen {
+  position: absolute;
+  inset: 0;
+}
+
+.menu-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    var(--bg-scrim-strong) 0%,
+    var(--bg-scrim-strong) 42%,
+    rgba(8, 9, 12, 0.62) 62%,
+    transparent 84%
+  );
+  pointer-events: none;
+}
+
+.menu-col {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--menu-width);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  padding: clamp(28px, 4vh, 48px) var(--menu-pad-x) clamp(24px, 3vh, 36px);
+  /* Safety net for very short viewports: the column itself scrolls rather
+     than clipping a detail panel that couldn't fit even after the inner
+     list hit its min-height floor. */
+  overflow-y: auto;
+}
+
+.menu-col.wide {
+  width: var(--menu-width-wide);
+}
+
+.menu-header {
+  flex: 0 0 auto;
+  margin-bottom: var(--sp-5);
+}
+
+.menu-title {
+  font-weight: 700;
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.03;
+  letter-spacing: 0.005em;
+  margin: var(--sp-1) 0 0;
+  color: var(--text);
+}
+
+.menu-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* The one scrollable region inside a menu column — lists and long forms.
+   Shrinks to fit when content is short (so a trailing detail panel sits
+   right after it, not stranded below empty space), is capped by the
+   column's remaining height and scrolls once content overflows it, but
+   never shrinks past two rows so it can't be squeezed to nothing on a
+   short viewport when a sibling (chips, a detail panel) needs room too. */
+.menu-scroll {
+  flex: 0 1 auto;
+  max-height: 100%;
+  min-height: 96px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  /* a long list (46 cars in Brand Central) must never be squeezed to a slot by
+     the detail panel beneath it: it keeps at least 45 % of the body */
+  min-height: max(96px, 45%);
+}
+
+/* ---------- Home top bar ---------- */
+
+.top-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(18px, 2.8vh, 26px) clamp(24px, 3vw, 44px);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(to bottom, rgba(6, 7, 10, 0.75), transparent);
+}
+
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.wordmark-emblem {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.wordmark-text {
+  font-family: var(--font-display);
+  font-size: clamp(15px, 1.6vw, 19px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+
+.credits-block {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.credits-icon {
+  display: none;
+}
+
+.top-bar .credits {
+  font-family: var(--font-display);
+  color: var(--text);
+  font-size: clamp(16px, 1.5vw, 19px);
+  font-weight: 600;
+}
+
+.top-bar .driver-block,
+.top-bar .car-block {
+  text-align: right;
+}
+
+.top-bar .driver-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.top-bar .car-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.top-bar .car-pp {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- Career progress strip ---------- */
+
+.home-progress-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--line);
+  z-index: 1;
+}
+
+.home-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* ---------- Home vertical menu ---------- */
+
+.home-bg-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(6, 7, 10, 0.82) 0%,
+    rgba(6, 7, 10, 0.5) 38%,
+    transparent 62%
+  );
+  pointer-events: none;
+}
+
+.home-menu {
+  position: absolute;
+  left: clamp(24px, 3vw, 44px);
+  right: clamp(24px, 3vw, 44px);
+  top: clamp(96px, 15vh, 140px);
+  bottom: 56px;
+  max-width: var(--menu-width-wide);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Bottom hairline ticker ---------- */
+
+.home-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 0 clamp(24px, 3vw, 44px);
+  border-top: 1px solid var(--line);
+  background: var(--bg-scrim-soft);
+}
+
+.home-ticker-label {
+  flex: 0 0 auto;
+}
+
+.home-ticker-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: tickerFade var(--dur-slow) var(--ease-out);
+}
+
+@keyframes tickerFade {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Detail panels under a list (Brand Central, garage) take what the list leaves
+   and scroll on their own instead of pushing the list out of view. */
+.dealer-detail,
+.garage-detail {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.dealer-detail > .card-sub,
+.garage-detail > .card-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

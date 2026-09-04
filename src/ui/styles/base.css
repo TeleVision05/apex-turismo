@@ -1,0 +1,105 @@
+/* Base reset, typography primitives and screen-transition plumbing. */
+
+/* No background here: the UI root sits over the live 3D scene (showroom,
+   track) and must stay transparent everywhere a screen doesn't paint its
+   own scrim. */
+.apex-ui {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-body);
+  font-feature-settings: 'tnum' 1;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.apex-ui * {
+  box-sizing: border-box;
+}
+
+.apex-ui ::selection {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.apex-ui *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.apex-ui *::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+}
+
+.apex-ui *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Typography primitives ---------- */
+
+.overline {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  margin: 0;
+}
+
+/* ---------- Screens & transitions ---------- */
+
+.screens {
+  position: absolute;
+  inset: 0;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
+  visibility: hidden;
+}
+
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+/* The race screen has no menu content of its own — the HUD layer handles it,
+   and the canvas underneath must keep receiving input. */
+.screen-race.active {
+  pointer-events: none;
+}
+
+/* ---------- Shared surfaces ---------- */
+
+/* A solid overlay surface (pause/results/replay bar/capture overlay/hud
+   standings) — a tone layer with a hairline border, never blur or glow. */
+.panel {
+  background: var(--bg-scrim-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}

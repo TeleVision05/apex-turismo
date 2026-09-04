@@ -21,18 +21,6 @@ import { ReplayRecorder, type Replay } from './Replay';
 import { AIDriver } from './AIDriver';
 import { ReplayCameraDirector } from '../render/ReplayCamera';
 
-const ENGINE_KIND: Record<string, CarAudioState['engine']> = {
-  sakura_86: 'i4',
-  hakone_type_r: 'i4',
-  kaizen_rx7: 'rotary',
-  shinsei_gtr: 'v6',
-  bavaria_m4: 'i6',
-  stallion_gt: 'v8',
-  vantage_sf: 'v8hybrid',
-  aurelia_gt3: 'flat6',
-  lyon_lmp: 'v8hybrid',
-};
-
 export function emptyHud(): HudState {
   return {
     speedKmh: 0,
@@ -197,7 +185,7 @@ export class RaceRuntime {
       shifting: false,
       onGrass: false,
       onCurb: false,
-      engine: ENGINE_KIND[spec.id] ?? 'i4',
+      engine: spec.engine,
     };
   }
 

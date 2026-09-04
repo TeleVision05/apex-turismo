@@ -4,6 +4,7 @@ import { Vehicle, PHYSICS_DT } from './Vehicle';
 import { carById } from '../data/cars';
 import { defaultTuning } from './Tuning';
 import { emptyInput } from '../core/Input';
+import { ovalJson as skidPadOval } from './testUtils';
 import type { TrackJson, Assists } from '../core/types';
 
 /** A 2 km oval: two 500 m straights joined by semicircles of radius ~159 m. */
@@ -157,5 +158,65 @@ describe('Vehicle', () => {
     input.shiftUp = true;
     v.setControls(input, PHYSICS_DT);
     expect(v.gear).toBe(2);
+  });
+});
+
+interface SkidPadResult {
+  mean: number;
+  std: number;
+  peak: number;
+}
+
+/**
+ * Builds speed in a straight line, then holds a fixed steer input for
+ * `seconds` and records the body yaw rate throughout.
+ */
+function runSkidPad(steerFraction: number, seconds: number): SkidPadResult {
+  // A real skid pad is a wide paved area, not a single racing lane: use a
+  // wide version of the spec's oval (same straight/radius) so the car has
+  // room to settle into a steady turn instead of running onto the grass
+  // within a couple of seconds.
+  const track = new Track(skidPadOval(300, 2500, 1200));
+  const spec = carById('kaizen_rx7');
+  const v = new Vehicle(spec, defaultTuning(spec), track, assists, 'auto');
+  v.placeAt(20, 0);
+  const input = emptyInput();
+  input.throttle = 0.5;
+  let buildT = 0;
+  while (v.speedKmh < 70 && buildT < 20) {
+    v.setControls(input, PHYSICS_DT);
+    v.step(PHYSICS_DT);
+    buildT += PHYSICS_DT;
+  }
+  expect(v.speedKmh).toBeGreaterThanOrEqual(65);
+
+  input.steer = steerFraction;
+  input.throttle = 0.25;
+  const steps = Math.round(seconds / PHYSICS_DT);
+  const settleStart = Math.round((seconds - 3) / PHYSICS_DT);
+  const settled: number[] = [];
+  let peak = 0;
+  for (let i = 0; i < steps; i++) {
+    v.setControls(input, PHYSICS_DT);
+    v.step(PHYSICS_DT);
+    const yaw = v.angVel.y;
+    peak = Math.max(peak, Math.abs(yaw));
+    if (i >= settleStart) settled.push(yaw);
+  }
+  const mean = settled.reduce((a, b) => a + b, 0) / settled.length;
+  const variance = settled.reduce((a, b) => a + (b - mean) * (b - mean), 0) / settled.length;
+  return { mean, std: Math.sqrt(variance), peak };
+}
+
+describe('Vehicle skid-pad', () => {
+  it('a fixed steer input settles into a steady, non-weaving yaw rate', () => {
+    const { mean, std, peak } = runSkidPad(0.25, 10);
+    // actually turning, not just crawling along the centreline
+    expect(Math.abs(mean)).toBeGreaterThan(0.02);
+    // no weave: the yaw rate barely wobbles once settled
+    expect(std).toBeLessThan(0.15 * Math.abs(mean));
+    // step-steer overshoot: the transient peak stays close to the steady value
+    const overshoot = (peak - Math.abs(mean)) / Math.abs(mean);
+    expect(overshoot).toBeLessThan(0.35);
   });
 });

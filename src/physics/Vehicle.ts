@@ -5,11 +5,20 @@ import { Drivetrain } from './Drivetrain';
 import {
   tyreForce,
   tyreParamsFor,
+  computeSlipAngle,
+  updateSlipAngleLag,
   SURFACE_GRIP,
   SURFACE_ROLLING,
   type TyreParams,
   type TyreForce,
 } from './TireModel';
+import {
+  ackermannAngles,
+  steerScale as computeSteerScale,
+  stepSteering,
+  wheelDirs,
+} from './Steering';
+import { applyTractionControl, applyBrake, type BrakeParams } from './Assists';
 import { clamp } from '../core/math';
 import { applyTuning, type EffectiveSpec } from './Tuning';
 
@@ -38,6 +47,8 @@ export interface WheelState {
   skid: number; // 0..1 how much the tyre is sliding
   /** spring compression that carries the static load (preload) */
   restCompression: number;
+  /** relaxation-lagged slip angle used for lateral force, rad */
+  slipAngleLag: number;
 }
 
 export interface VehicleControls {
@@ -149,6 +160,7 @@ export class Vehicle {
       worldCenter: new Vector3(),
       skid: 0,
       restCompression: 0,
+      slipAngleLag: 0,
     });
     // order: FL, FR, RL, RR (car forward is -Z, so the front axle sits at -fx)
     this.wheels.push(
@@ -215,21 +227,22 @@ export class Vehicle {
 
   /** Radians of road-wheel angle per unit of steering input at the current speed. */
   steerScale(): number {
-    const s = this.spec;
-    const v = Math.abs(this.speed);
-    const lock = (s.steerLockDeg * Math.PI) / 180;
-    if (this.directSteer) return lock;
-    // speed-sensitive lock so pad/keyboard remain controllable at high speed
-    const factor = 1 / (1 + Math.pow(v / 22, 1.35));
-    return lock * Math.max(0.17, factor);
+    return computeSteerScale(this.spec, this.tyres, this.speed, this.directSteer);
   }
 
   private applySteering(dt: number): void {
-    const v = Math.abs(this.speed);
-    const target = this.controls.steer * this.steerScale();
-    const rate = this.directSteer ? 12 : 6 + v * 0.05;
-    const delta = clamp(target - this.steerAngle, -rate * dt, rate * dt);
-    this.steerAngle += delta;
+    const frontAxleFz = (this.wheels[0].fz + this.wheels[1].fz) / 2;
+    this.steerAngle = stepSteering({
+      spec: this.spec,
+      tyres: this.tyres,
+      speed: this.speed,
+      yawRate: this.angVel.y,
+      directSteer: this.directSteer,
+      steerInput: this.controls.steer,
+      currentAngle: this.steerAngle,
+      frontAxleFz,
+      dt,
+    });
   }
 
   updateAxes(): void {
@@ -320,11 +333,15 @@ export class Vehicle {
       }
     }
     const drivenOmega = drivenCount ? drivenSum / drivenCount : 0;
-    this.wheels[0].steer = this.wheels[1].steer = this.steerAngle;
+    const ack = ackermannAngles(this.steerAngle, s.wheelbaseM, s.trackM);
+    this.wheels[0].steer = ack.left;
+    this.wheels[1].steer = ack.right;
     let throttle = this.controls.throttle;
     if (this.transmission === 'auto')
-      dtr.autoShift(throttle, this.controls.brake, this.speed, drivenOmega);
-    throttle = this.applyTractionControl(throttle);
+      dtr.autoShift(dt, throttle, this.controls.brake, this.speed, this.speed / s.wheelRadiusM);
+    const tcs = applyTractionControl(this.wheels, this.assists.tcs, throttle);
+    throttle = tcs.throttle;
+    this.tcsActive = tcs.active;
     dtr.update(dt, throttle, drivenOmega);
     const axleTorque = dtr.axleTorque(throttle);
     const reflected = dtr.reflectedInertia();
@@ -332,6 +349,13 @@ export class Vehicle {
     const sub = 4;
     const sdt = dt / sub;
     const wheelInertia = 1.1;
+    const brakeParams: BrakeParams = {
+      brakeInput: this.controls.brake,
+      handbrake: this.controls.handbrake,
+      absEnabled: this.assists.abs,
+      torqueNm: s.brakeTorqueNm,
+      bias: s.brakeBias,
+    };
     for (let k = 0; k < sub; k++) {
       for (let i = 0; i < 4; i++) {
         const w = this.wheels[i];
@@ -346,17 +370,17 @@ export class Vehicle {
           drive -= 45 * (w.omega - other.omega);
         }
         const inertia = wheelInertia + (w.driven ? reflected / Math.max(1, drivenCount) : 0);
-        const tf = this.computeTyreForce(w, i);
+        const tf = this.computeTyreForce(w, sdt);
         const rolling = w.contact
           ? SURFACE_ROLLING[w.surface] * w.fz * w.radius * Math.sign(w.omega)
           : 0;
         const net = drive - tf.fx * w.radius - rolling;
         // semi-implicit: the tyre reaction is linearised in omega so stiff tyres stay stable
         w.omega += (net * sdt) / (inertia + sdt * tf.stiffness * w.radius);
-        this.applyBrake(w, i, sdt, inertia);
+        if (applyBrake(w, front, brakeParams, this.speed, sdt, inertia)) this.absActive = true;
         if (k === sub - 1 && w.contact) {
           this.tmp
-            .copy(this.wheelDirs(w.steer, this.tmp2, this.tmp3).fw)
+            .copy(wheelDirs(this.forward, this.right, w.steer, this.tmp2, this.tmp3).fw)
             .multiplyScalar(tf.fx)
             .addScaledVector(this.tmp3, tf.fy);
           this.addForceAt(this.tmp, w.contactPoint);
@@ -366,41 +390,26 @@ export class Vehicle {
     }
   }
 
-  private applyTractionControl(throttle: number): number {
-    this.tcsActive = false;
-    const level = this.assists.tcs;
-    if (level <= 0 || throttle <= 0.02) return throttle;
-    let worst = 0;
-    for (const w of this.wheels)
-      if (w.driven && w.contact) worst = Math.max(worst, w.force.slipRatio);
-    const threshold = level >= 2 ? 0.09 : 0.16;
-    if (worst > threshold) {
-      const cut = clamp(1 - (worst - threshold) / 0.12, 0.15, 1);
-      this.tcsActive = true;
-      return throttle * cut;
-    }
-    return throttle;
-  }
-
-  /** wheel forward/right directions for a steering angle */
-  private wheelDirs(steer: number, fw: Vector3, rw: Vector3): { fw: Vector3; rw: Vector3 } {
-    const c = Math.cos(steer);
-    const sn = Math.sin(steer);
-    fw.copy(this.forward).multiplyScalar(c).addScaledVector(this.right, sn);
-    rw.copy(this.right).multiplyScalar(c).addScaledVector(this.forward, -sn);
-    return { fw, rw };
-  }
-
-  private computeTyreForce(w: WheelState, i: number): TyreForce {
+  private computeTyreForce(w: WheelState, sdt: number): TyreForce {
     if (!w.contact) {
       w.force.fx = w.force.fy = w.force.combinedSlip = 0;
       w.force.slipRatio = 0;
       return w.force;
     }
-    const dirs = this.wheelDirs(i < 2 ? this.steerAngle : 0, this.tmp2, this.tmp3);
+    const dirs = wheelDirs(this.forward, this.right, w.steer, this.tmp2, this.tmp3);
     const vC = this.pointVelocity(w.contactPoint, this.tmp);
     const vx = vC.dot(dirs.fw);
     const vy = vC.dot(dirs.rw);
+    // lateral force builds over distance rather than instantly; the
+    // longitudinal (slip-ratio) path below stays instantaneous
+    const target = computeSlipAngle(vx, vy);
+    w.slipAngleLag = updateSlipAngleLag(
+      w.slipAngleLag,
+      target,
+      vx,
+      sdt,
+      this.tyres.relaxationLength,
+    );
     return tyreForce(
       this.tyres,
       w.fz,
@@ -410,27 +419,8 @@ export class Vehicle {
       w.radius,
       SURFACE_GRIP[w.surface] * this.weatherGrip,
       w.force,
+      w.slipAngleLag,
     );
-  }
-
-  private applyBrake(w: WheelState, i: number, dt: number, inertia: number): void {
-    const s = this.spec;
-    const front = i < 2;
-    let torque =
-      this.controls.brake * s.brakeTorqueNm * (front ? s.brakeBias : 1 - s.brakeBias) * 0.5;
-    if (this.controls.handbrake && !front) torque = Math.max(torque, s.brakeTorqueNm * 0.35);
-    if (this.assists.abs && torque > 0 && w.contact && Math.abs(this.speed) > 2) {
-      const lock = -w.force.slipRatio;
-      if (lock > 0.12) {
-        torque *= clamp(1 - (lock - 0.12) / 0.15, 0.2, 1);
-        this.absActive = true;
-      }
-    }
-    w.brakeTorque = torque;
-    if (torque <= 0) return;
-    const dOmega = (torque / inertia) * dt;
-    if (Math.abs(w.omega) <= dOmega) w.omega = 0;
-    else w.omega -= Math.sign(w.omega) * dOmega;
   }
 
   private applyAero(): void {

@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtCredits } from '../format';
-import { makeCard, makeScreenHeader } from '../widgets';
+import { makeListRow, makeMenuShell } from '../widgets';
 import { eventById } from '../../data/events';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -10,15 +10,14 @@ import type { RaceEvent } from '../../data/events';
 class EventsScreen implements Screen {
   readonly el: HTMLElement;
   private notice = el('div', 'notice error hidden');
-  private list = el('div', 'side-panel-scroll');
+  private list = el('div', 'menu-scroll');
   private focusItems: FocusItem[] = [];
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-events');
-    const panel = el('div', 'side-panel panel');
-    panel.style.width = 'min(56vw, 680px)';
-    panel.append(makeScreenHeader('world', 'World Circuits'), this.notice, this.list);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Career', 'World Circuits', { wide: true });
+    shell.body.append(this.notice, this.list);
+    this.el.appendChild(shell.el);
   }
 
   onShow(): void {
@@ -64,31 +63,31 @@ class EventsScreen implements Screen {
 
   private buildCard(ev: RaceEvent): void {
     const unlocked = this.ctx.facade.eventUnlocked(ev.id);
-    const card = makeCard(unlocked ? '' : 'locked', unlocked ? () => this.enter(ev) : undefined);
-    if (!unlocked) card.el.classList.add('disabled');
+    const row = makeListRow(unlocked ? '' : 'locked', unlocked ? () => this.enter(ev) : undefined);
+    if (!unlocked) row.el.classList.add('disabled');
 
     const titleRow = el('div', 'card-title-row');
     titleRow.append(
       el('div', 'card-title', ev.name),
       el('div', `pill ${unlocked ? 'class' : 'locked'}`, unlocked ? ev.difficulty : 'Locked'),
     );
-    card.el.append(titleRow, el('div', 'card-sub', ev.description), this.buildMeta(ev));
+    row.el.append(titleRow, el('div', 'card-sub', ev.description), this.buildMeta(ev));
 
     const best = this.ctx.facade.save.completedEvents[ev.id];
     if (best)
-      card.el.appendChild(
+      row.el.appendChild(
         el('div', 'card-sub', `Best result: P${best.bestPosition} (${best.count} entries)`),
       );
 
     if (!unlocked && ev.requires) {
       const req = eventById(ev.requires);
-      card.el.appendChild(
+      row.el.appendChild(
         el('div', 'notice info', `Complete ${req?.name ?? 'the previous event'} first`),
       );
     }
 
-    this.list.appendChild(card.el);
-    if (unlocked) this.focusItems.push(card.item);
+    this.list.appendChild(row.el);
+    if (unlocked) this.focusItems.push(row.item);
   }
 
   private rebuild(): void {

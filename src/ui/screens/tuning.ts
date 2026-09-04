@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtPP } from '../format';
-import { makeButton, makeScreenHeader, makeSlider } from '../widgets';
+import { makeButton, makeMenuShell, makeSlider } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { UpgradeInfo } from '../UiContract';
@@ -19,20 +19,15 @@ class TuningScreen implements Screen {
   readonly el: HTMLElement;
   private carName = el('div', 'card-title', '');
   private ppReadout = el('div', 'card-sub', '');
-  private body = el('div', 'side-panel-scroll');
+  private body = el('div', 'menu-scroll');
   private focusItems: FocusItem[] = [];
   private notice: string | null = null;
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-tuning');
-    const panel = el('div', 'side-panel panel');
-    panel.append(
-      makeScreenHeader('wrench', 'Tuning Shop'),
-      this.carName,
-      this.ppReadout,
-      this.body,
-    );
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Upgrade & setup', 'Tuning Shop');
+    shell.body.append(this.carName, this.ppReadout, this.body);
+    this.el.appendChild(shell.el);
   }
 
   onShow(): void {

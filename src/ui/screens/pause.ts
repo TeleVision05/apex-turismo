@@ -1,5 +1,5 @@
 import { el, clear } from '../dom';
-import { makeButton, makeScreenHeader } from '../widgets';
+import { makeButton } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 
@@ -7,7 +7,7 @@ import type { FocusItem } from '../Focus';
 export function createPauseScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-pause');
   const box = el('div', 'center-panel panel');
-  box.appendChild(makeScreenHeader('pause', 'Paused', 'pause-title'));
+  box.appendChild(el('div', 'overline pause-title', 'Paused'));
   const buttons = el('div', 'form-rows');
   box.appendChild(buttons);
   root.appendChild(box);
@@ -23,24 +23,20 @@ export function createPauseScreen(ctx: ScreenContext): Screen {
         ctx.sound('confirm');
         ctx.facade.resumeRace();
       },
-      { className: 'primary', icon: 'resume' },
+      { className: 'primary' },
     );
-    const restart = makeButton(
-      'Restart',
-      () => {
-        ctx.sound('confirm');
-        ctx.facade.restartRace();
-      },
-      { icon: 'restart' },
-    );
-    const settings = makeButton('Settings', () => ctx.show('settings'), { icon: 'sliders' });
+    const restart = makeButton('Restart', () => {
+      ctx.sound('confirm');
+      ctx.facade.restartRace();
+    });
+    const settings = makeButton('Settings', () => ctx.show('settings'));
     const quit = makeButton(
       'Quit to menu',
       () => {
         ctx.sound('back');
         ctx.facade.quitToHome();
       },
-      { className: 'danger', icon: 'quit' },
+      { className: 'danger' },
     );
     for (const w of [resume, restart, settings, quit]) {
       buttons.appendChild(w.el);

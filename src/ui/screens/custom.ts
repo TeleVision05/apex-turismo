@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
-import { makeButton, makeCycle, makeScreenHeader, makeSlider, makeToggle } from '../widgets';
+import { makeButton, makeCycle, makeMenuShell, makeSlider, makeToggle } from '../widgets';
 import {
   DIFFICULTY_OPTIONS,
   TIME_OF_DAY_OPTIONS,
@@ -25,15 +25,15 @@ interface CustomState {
 /** Custom Race: full free setup form, starts with facade.startRace(). */
 class CustomScreen implements Screen {
   readonly el: HTMLElement;
-  private body = el('div', 'side-panel-scroll form-rows');
+  private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private state: CustomState;
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-custom');
-    const panel = el('div', 'side-panel panel');
-    panel.append(makeScreenHeader('flag', 'Custom Race'), this.body);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('One-off race', 'Custom Race');
+    shell.body.appendChild(this.body);
+    this.el.appendChild(shell.el);
     this.state = {
       trackId: '',
       laps: 3,

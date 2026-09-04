@@ -5,3 +5,4 @@ tools/tracks/cache
 tools/**/__pycache__
 .DS_Store
 tools/cars/real_sources
+tools/cars/previews

@@ -1,9 +1,20 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtHp, fmtPP } from '../format';
-import { makeButton, makeCard, makeScreenHeader, makeSwatch } from '../widgets';
+import { makeButton, makeChip, makeListRow, makeMenuShell, makeSwatch } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
-import type { CarSpec, CarTuning } from '../../core/types';
+import type { CarClass, CarSpec, CarTuning } from '../../core/types';
+
+const CLASS_FILTERS: Array<CarClass | 'All'> = [
+  'All',
+  'N100',
+  'N200',
+  'N300',
+  'N500',
+  'Gr.4',
+  'Gr.3',
+  'Gr.1',
+];
 
 function stockTuning(spec: CarSpec): CarTuning {
   return {
@@ -25,12 +36,14 @@ function statBox(label: string, value: string): HTMLElement {
   return item;
 }
 
-/** Brand Central: every car grouped by maker, with a buy + colour flow. */
+/** Brand Central: every car grouped by maker, filterable by class, buy + colour flow. */
 class DealershipScreen implements Screen {
   readonly el: HTMLElement;
-  private list = el('div', 'side-panel-scroll');
+  private chipRow = el('div', 'chip-row');
+  private list = el('div', 'menu-scroll');
   private detail = el('div', 'dealer-detail');
   private cars: CarSpec[] = [];
+  private classFilter: CarClass | 'All' = 'All';
   private highlightId = '';
   private chosenColor = '';
   private notice: { kind: 'error' | 'info'; text: string } | null = null;
@@ -38,10 +51,9 @@ class DealershipScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-dealership');
-    const panel = el('div', 'side-panel panel');
-    panel.appendChild(makeScreenHeader('tag', 'Brand Central'));
-    panel.append(this.list, this.detail);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Cars', 'Brand Central');
+    shell.body.append(this.chipRow, this.list, this.detail);
+    this.el.appendChild(shell.el);
   }
 
   onShow(): void {
@@ -122,13 +134,13 @@ class DealershipScreen implements Screen {
   }
 
   private buildCard(spec: CarSpec): void {
-    const card = makeCard(spec.id === this.highlightId ? 'selected' : '', () => {
+    const row = makeListRow(spec.id === this.highlightId ? 'selected' : '', () => {
       this.highlightId = spec.id;
       this.chosenColor = spec.defaultColor;
       this.notice = null;
       this.rebuild();
     });
-    card.item.onFocus = () => {
+    row.item.onFocus = () => {
       if (this.highlightId === spec.id) return;
       this.highlightId = spec.id;
       this.chosenColor = spec.defaultColor;
@@ -140,20 +152,25 @@ class DealershipScreen implements Screen {
     titleRow.appendChild(
       el('div', 'pill pp', fmtPP(this.ctx.facade.performancePoints(spec, stockTuning(spec)))),
     );
-    card.el.appendChild(titleRow);
-    card.el.appendChild(el('div', 'card-sub', `${spec.carClass} · ${fmtCredits(spec.priceCr)}`));
+    row.el.appendChild(titleRow);
+    row.el.appendChild(el('div', 'card-sub', `${spec.carClass} · ${fmtCredits(spec.priceCr)}`));
     if (this.isOwned(spec.id)) {
       const meta = el('div', 'card-meta');
       meta.appendChild(el('span', 'pill owned', 'Owned'));
-      card.el.appendChild(meta);
+      row.el.appendChild(meta);
     }
-    this.list.appendChild(card.el);
-    this.focusItems.push(card.item);
+    this.list.appendChild(row.el);
+    this.focusItems.push(row.item);
   }
 
-  private groupedByMaker(): Map<string, CarSpec[]> {
+  private filteredCars(): CarSpec[] {
+    if (this.classFilter === 'All') return this.cars;
+    return this.cars.filter((c) => c.carClass === this.classFilter);
+  }
+
+  private groupedByMaker(cars: CarSpec[]): Map<string, CarSpec[]> {
     const map = new Map<string, CarSpec[]>();
-    for (const spec of this.cars) {
+    for (const spec of cars) {
       const arr = map.get(spec.maker) ?? [];
       arr.push(spec);
       map.set(spec.maker, arr);
@@ -161,23 +178,41 @@ class DealershipScreen implements Screen {
     return map;
   }
 
+  private buildChips(): void {
+    clear(this.chipRow);
+    for (const cls of CLASS_FILTERS) {
+      const chip = makeChip(cls, cls === this.classFilter, () => {
+        this.classFilter = cls;
+        this.rebuild();
+      });
+      this.chipRow.appendChild(chip.el);
+      this.focusItems.push(chip.item);
+    }
+  }
+
   private rebuild(): void {
     this.focusItems = [];
     clear(this.list);
     this.cars = this.ctx.facade.cars();
-    if (!this.cars.find((c) => c.id === this.highlightId))
-      this.highlightId = this.cars[0]?.id ?? '';
+    this.buildChips();
 
-    for (const [maker, makerCars] of this.groupedByMaker()) {
+    const filtered = this.filteredCars();
+    if (!filtered.find((c) => c.id === this.highlightId)) this.highlightId = filtered[0]?.id ?? '';
+
+    for (const [maker, makerCars] of this.groupedByMaker(filtered)) {
       this.list.appendChild(el('div', 'section-label', maker));
       for (const spec of makerCars) this.buildCard(spec);
     }
 
-    const highlighted = this.cars.find((c) => c.id === this.highlightId);
+    const highlighted = filtered.find((c) => c.id === this.highlightId);
     if (highlighted) {
       if (!this.chosenColor) this.chosenColor = highlighted.defaultColor;
       this.ctx.facade.showroom(highlighted.id, this.chosenColor);
       this.buildDetail(highlighted);
+    } else {
+      clear(this.detail);
+      this.ctx.facade.showroom(null);
+      this.detail.appendChild(el('div', 'notice info', 'No cars in this class'));
     }
   }
 }

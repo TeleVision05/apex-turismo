@@ -1,0 +1,105 @@
+/* Design tokens for the Apex Turismo UI — broadcast-motorsport / GT7 editorial.
+   One accent (racing red), near-black ground, tone layers instead of blur or
+   glow, hard corners, condensed grotesk for headings/labels/numerals. */
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/barlow-condensed-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/barlow-condensed-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/barlow-condensed-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/barlow-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/barlow-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/barlow-600.woff2') format('woff2');
+}
+
+:root {
+  /* ---- ground + tone layers (depth via tone, never blur/glow) ---- */
+  --bg: #0a0c10;
+  --bg-1: #0e1116;
+  --bg-2: #14171e;
+  --bg-scrim-strong: rgba(8, 9, 12, 0.94);
+  --bg-scrim-soft: rgba(8, 9, 12, 0.55);
+
+  /* ---- type colour ---- */
+  --text: #f3f2ee;
+  --text-dim: rgba(243, 242, 238, 0.64);
+  --text-dimmer: rgba(243, 242, 238, 0.36);
+
+  /* ---- the one accent, plus two functional signal colours reserved for
+     live timing/telemetry data (faster/slower), never used decoratively ---- */
+  --accent: #e10600;
+  --accent-strong: #ff2015;
+  --accent-text: #0a0c10;
+  --good: #3ecf6e;
+  --warn: #e8b923;
+
+  /* ---- hairlines ---- */
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.24);
+
+  /* ---- type families ---- */
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+
+  /* ---- spacing, 8px grid ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- radius: hard corners everywhere, one soft value for small controls ---- */
+  --radius: 2px;
+
+  /* ---- motion: short ease-out, opacity/transform only ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-slow: 180ms;
+
+  /* ---- menu column layout ---- */
+  --menu-width: clamp(480px, 38vw, 600px);
+  --menu-width-wide: clamp(560px, 46vw, 700px);
+  --menu-pad-x: clamp(28px, 3.4vw, 48px);
+}

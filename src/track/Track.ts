@@ -31,6 +31,8 @@ export const RUNOFF_WIDTH = 7;
 export const CURB_WIDTH = 1.2;
 /** Height added to the upper road at a crossover (Suzuka's bridge). */
 export const BRIDGE_HEIGHT = 7;
+/** Tightest plan-view radius the centreline may carry; see relaxTightCorners. */
+export const MIN_CORNER_RADIUS = 10;
 
 /**
  * Runtime representation of a circuit: a closed ring of samples with
@@ -72,6 +74,7 @@ export class Track {
       json.widths.length === this.n ? json.widths : this.points.map(() => 12),
     );
     this.bridge = new Uint8Array(this.n);
+    this.relaxTightCorners();
     this.raiseCrossovers();
     this.forwards = [];
     this.rights = [];
@@ -79,6 +82,45 @@ export class Track {
     this.curvatures = new Float32Array(this.n);
     this.computeFrames();
     this.buildCoarse();
+  }
+
+  /**
+   * OSM traces resampled at 4 m carry kinks far tighter than any real corner
+   * (Remus at the Red Bull Ring came out at a 6.6 m radius, Suzuka's chicane
+   * at 4.8 m). Where the local radius drops below the road half width plus
+   * run-off, the inside edge of the road ribbon folds over itself and the
+   * nearest-centreline lookup jumps whole samples on a grade: the "step in
+   * the road" that launched cars. Laplacian-relax the plan-view polyline at
+   * such kinks until every sample keeps a realistic minimum radius; heights
+   * are left alone because they are already smooth against the index.
+   */
+  private relaxTightCorners(): void {
+    const n = this.n;
+    const minRadius = Math.max(MIN_CORNER_RADIUS, this.widths[0] * 0.5 + RUNOFF_WIDTH);
+    const marked = new Uint8Array(n);
+    const xs = new Float64Array(n);
+    const zs = new Float64Array(n);
+    for (let iter = 0; iter < 200; iter++) {
+      marked.fill(0);
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        if (localRadius(this.points, i) >= minRadius) continue;
+        marked[wrapIndex(i - 1, n)] = marked[i] = marked[wrapIndex(i + 1, n)] = 1;
+        any = true;
+      }
+      if (!any) return;
+      for (let i = 0; i < n; i++) {
+        xs[i] = this.points[i].x;
+        zs[i] = this.points[i].z;
+      }
+      for (let i = 0; i < n; i++) {
+        if (!marked[i]) continue;
+        const a = wrapIndex(i - 1, n);
+        const b = wrapIndex(i + 1, n);
+        this.points[i].x = 0.5 * xs[i] + 0.25 * (xs[a] + xs[b]);
+        this.points[i].z = 0.5 * zs[i] + 0.25 * (zs[a] + zs[b]);
+      }
+    }
   }
 
   /** Detects 2D self-intersections and lifts the later segment onto a bridge. */
@@ -146,11 +188,11 @@ export class Track {
     );
     const guess = this.coarse[cz * this.coarseCols + cx];
     let best = guess;
-    let bestD = this.points[guess].distanceToSquared(pos);
+    let bestD = distXZ2(this.points[guess], pos);
     const window = 12;
     for (let k = -window; k <= window; k++) {
       const i = wrapIndex(guess + k, this.n);
-      const d = this.points[i].distanceToSquared(pos);
+      const d = distXZ2(this.points[i], pos);
       if (d < bestD) {
         bestD = d;
         best = i;
@@ -204,10 +246,10 @@ export class Track {
     if (hint === null) return this.nearestIndexGlobal(pos);
     const window = 30;
     let best = hint;
-    let bestD = this.points[hint].distanceToSquared(pos);
+    let bestD = distXZ2(this.points[hint], pos);
     for (let k = -window; k <= window; k++) {
       const i = wrapIndex(hint + k, this.n);
-      const d = this.points[i].distanceToSquared(pos);
+      const d = distXZ2(this.points[i], pos);
       if (d < bestD) {
         bestD = d;
         best = i;
@@ -217,22 +259,37 @@ export class Track {
     return best;
   }
 
-  /** Projects a position onto the centreline and returns local track information. */
+  /**
+   * Projects a position onto the road and returns local track information.
+   * The road ribbon is ruled between consecutive cross-sections (the line
+   * through each sample along its right vector), so the point is located on
+   * the bilinear quad between two sections: a section parameter u and a
+   * lateral offset d along the interpolated section. Both quads meeting at the
+   * nearest sample share that sample's section, so height and lateral stay
+   * continuous no matter which sample the nearest-index search settles on,
+   * even on the inside of tight corners where the sections converge.
+   */
   query(pos: Vector3, hint: number | null, out?: TrackQuery): TrackQuery {
     const i = this.nearestIndex(pos, hint);
-    const p = this.points[i];
-    const f = this.forwards[i];
-    const dx = pos.x - p.x;
-    const dz = pos.z - p.z;
-    const along = dx * f.x + dz * f.z; // metres ahead of the sample
-    const t = Math.max(-1, Math.min(1, along / this.spacing));
-    const j = wrapIndex(i + (t >= 0 ? 1 : -1), this.n);
-    const q = this.points[j];
-    const at = Math.abs(t);
-    const height = p.y + (q.y - p.y) * at;
-    const r = this.rights[i];
-    const lateral = dx * r.x + dz * r.z;
-    const halfWidth = (this.widths[i] + (this.widths[j] - this.widths[i]) * at) * 0.5;
+    const n = this.n;
+    const prev = wrapIndex(i - 1, n);
+    const next = wrapIndex(i + 1, n);
+    const pts = this.points;
+    const rts = this.rights;
+    const uA = sectionParam(pts[prev], pts[i], rts[prev], rts[i], pos);
+    const dA = sectionScratch.d;
+    const uB = sectionParam(pts[i], pts[next], rts[i], rts[next], pos);
+    const dB = sectionScratch.d;
+    // prefer the quad that contains the point; otherwise the one it overshoots least
+    const missA = uA < 0 ? -uA : uA > 1 ? uA - 1 : 0;
+    const missB = uB < 0 ? -uB : uB > 1 ? uB - 1 : 0;
+    const useA = missA < missB;
+    const a = useA ? prev : i;
+    const b = useA ? i : next;
+    const u = clampInt(useA ? uA : uB, 0, 1);
+    const lateral = useA ? dA : dB;
+    const height = pts[a].y + (pts[b].y - pts[a].y) * u;
+    const halfWidth = (this.widths[a] + (this.widths[b] - this.widths[a]) * u) * 0.5;
     const res = out ?? {
       index: 0,
       s: 0,
@@ -245,12 +302,12 @@ export class Track {
       curvature: 0,
     };
     res.index = i;
-    res.s = wrapS(i * this.spacing + along, this.length);
+    res.s = wrapS((a + u) * this.spacing, this.length);
     res.lateral = lateral;
     res.halfWidth = halfWidth;
     res.height = height;
-    res.forward.copy(f);
-    res.right.copy(r);
+    res.forward.copy(this.forwards[i]);
+    res.right.copy(this.rights[i]);
     res.normal.copy(this.normals[i]);
     res.curvature = this.curvatures[i];
     return res;
@@ -296,6 +353,63 @@ export class Track {
 
 export const wrapS = (s: number, length: number): number => ((s % length) + length) % length;
 const clampInt = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
+const distXZ2 = (p: Vector3, q: Vector3): number => (p.x - q.x) ** 2 + (p.z - q.z) ** 2;
+const sectionScratch = { d: 0 };
+
+/**
+ * Locates `pos` on the ruled quad between cross-sections a and b in plan view:
+ * solves pos = lerp(pa, pb, u) + d * lerp(ra, rb, u) for u (returned,
+ * unclamped) and d (left in sectionScratch.d, measured along the section at
+ * the clamped u). The parallel condition is a quadratic in u; the root nearest
+ * [0, 1] is taken.
+ */
+function sectionParam(pa: Vector3, pb: Vector3, ra: Vector3, rb: Vector3, pos: Vector3): number {
+  const ax = pos.x - pa.x;
+  const az = pos.z - pa.z;
+  const bx = pb.x - pa.x;
+  const bz = pb.z - pa.z;
+  const dx = rb.x - ra.x;
+  const dz = rb.z - ra.z;
+  const c0 = ax * ra.z - az * ra.x;
+  const c1 = ax * dz - az * dx - (bx * ra.z - bz * ra.x);
+  const c2 = -(bx * dz - bz * dx);
+  let u: number;
+  if (Math.abs(c2) < 1e-9) {
+    u = Math.abs(c1) < 1e-12 ? 0 : -c0 / c1;
+  } else {
+    const disc = c1 * c1 - 4 * c2 * c0;
+    if (disc <= 0) {
+      u = -c1 / (2 * c2);
+    } else {
+      const sq = Math.sqrt(disc);
+      const u1 = (-c1 + sq) / (2 * c2);
+      const u2 = (-c1 - sq) / (2 * c2);
+      u = missFromUnit(u1) <= missFromUnit(u2) ? u1 : u2;
+    }
+  }
+  const uc = clampInt(u, 0, 1);
+  const ex = ra.x + uc * dx;
+  const ez = ra.z + uc * dz;
+  const el2 = ex * ex + ez * ez || 1;
+  sectionScratch.d = ((ax - uc * bx) * ex + (az - uc * bz) * ez) / el2;
+  return u;
+}
+const missFromUnit = (u: number): number => (u < 0 ? -u : u > 1 ? u - 1 : 0);
+
+/** Plan-view radius of the turn at sample i: mean segment length over the turning angle. */
+export function localRadius(points: Vector3[], i: number): number {
+  const n = points.length;
+  const a = points[wrapIndex(i - 1, n)];
+  const b = points[i];
+  const c = points[wrapIndex(i + 1, n)];
+  const d1x = b.x - a.x;
+  const d1z = b.z - a.z;
+  const d2x = c.x - b.x;
+  const d2z = c.z - b.z;
+  const angle = Math.abs(Math.atan2(d1x * d2z - d1z * d2x, d1x * d2x + d1z * d2z));
+  if (angle < 1e-6) return Infinity;
+  return (0.5 * (Math.hypot(d1x, d1z) + Math.hypot(d2x, d2z))) / angle;
+}
 
 function segmentsCross(a: Vector3, b: Vector3, c: Vector3, d: Vector3): boolean {
   const d1 = orient(c, d, a);

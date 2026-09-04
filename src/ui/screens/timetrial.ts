@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
-import { makeButton, makeCycle, makeScreenHeader } from '../widgets';
+import { makeButton, makeCycle, makeMenuShell } from '../widgets';
 import { TIME_OF_DAY_OPTIONS, TRANSMISSION_OPTIONS } from './raceOptions';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -9,15 +9,15 @@ import type { RaceConfig, TimeOfDay, Transmission } from '../../core/types';
 /** Time Trial: track + time of day + transmission, no traffic, 99 laps. */
 class TimeTrialScreen implements Screen {
   readonly el: HTMLElement;
-  private body = el('div', 'side-panel-scroll form-rows');
+  private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private state: { trackId: string; timeOfDay: TimeOfDay; transmission: Transmission };
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-timetrial');
-    const panel = el('div', 'side-panel panel');
-    panel.append(makeScreenHeader('stopwatch', 'Time Trial'), this.body);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('No traffic', 'Time Trial');
+    shell.body.appendChild(this.body);
+    this.el.appendChild(shell.el);
     this.state = {
       trackId: '',
       timeOfDay: 'noon',

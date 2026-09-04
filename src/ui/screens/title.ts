@@ -9,9 +9,7 @@ export function createTitleScreen(ctx: ScreenContext): Screen {
   wrap.appendChild(icon('emblem', 'title-emblem'));
   wrap.appendChild(el('div', 'game-title', 'APEX TURISMO'));
   wrap.appendChild(el('div', 'game-subtitle', 'The Real Driving Simulator'));
-  const press = el('div', 'press-start', 'Press any key or click to start');
-  press.appendChild(el('div', 'press-start-underline'));
-  wrap.appendChild(press);
+  wrap.appendChild(el('div', 'press-start', 'Press any key or click to start'));
   root.appendChild(wrap);
 
   const driverCredit = el('div', 'driver-credit', '');

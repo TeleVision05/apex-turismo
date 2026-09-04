@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { fmtHp, fmtKg, fmtKm, fmtNm, fmtPP, titleCase } from '../format';
-import { makeButton, makeCard, makeScreenHeader, makeSwatch } from '../widgets';
+import { makeButton, makeListRow, makeMenuShell, makeSwatch } from '../widgets';
 import { POWER_STAGES, WEIGHT_STAGES } from '../../physics/Tuning';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -16,7 +16,7 @@ function statRow(label: string, value: string): HTMLElement {
 /** Garage: owned car list, colour picker, sell flow and a live stat card. */
 class GarageScreen implements Screen {
   readonly el: HTMLElement;
-  private list = el('div', 'side-panel-scroll');
+  private list = el('div', 'menu-scroll');
   private detail = el('div', 'garage-detail');
   private highlightIndex = 0;
   private sellConfirm = false;
@@ -25,10 +25,9 @@ class GarageScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-garage');
-    const panel = el('div', 'side-panel panel');
-    panel.appendChild(makeScreenHeader('car', 'Garage'));
-    panel.append(this.list, this.detail);
-    this.el.appendChild(panel);
+    const shell = makeMenuShell('Owned cars', 'Garage');
+    shell.body.append(this.list, this.detail);
+    this.el.appendChild(shell.el);
   }
 
   onShow(): void {
@@ -120,7 +119,7 @@ class GarageScreen implements Screen {
     }
     this.detail.appendChild(swatchRow);
 
-    const stat = el('div', 'panel stat-card');
+    const stat = el('div', 'stat-card');
     stat.appendChild(el('div', 'section-label', 'Performance'));
     const grid = el('div', 'stat-grid');
     grid.append(
@@ -156,8 +155,8 @@ class GarageScreen implements Screen {
   private buildCard(owned: OwnedCar, idx: number): void {
     const spec = this.ctx.facade.ownedCarSpec(owned);
     const selected = idx === this.ctx.facade.save.selectedCar;
-    const card = makeCard(selected ? 'selected' : '', () => this.selectCar(idx));
-    card.item.onFocus = () => {
+    const row = makeListRow(selected ? 'selected' : '', () => this.selectCar(idx));
+    row.item.onFocus = () => {
       if (this.highlightIndex === idx) return;
       this.highlightIndex = idx;
       this.sellConfirm = false;
@@ -169,15 +168,15 @@ class GarageScreen implements Screen {
     titleRow.appendChild(
       el('div', 'pill pp', fmtPP(this.ctx.facade.performancePoints(spec, owned.tuning))),
     );
-    card.el.appendChild(titleRow);
-    card.el.appendChild(el('div', 'card-sub', `${spec.maker} · ${spec.carClass}`));
+    row.el.appendChild(titleRow);
+    row.el.appendChild(el('div', 'card-sub', `${spec.maker} · ${spec.carClass}`));
     const meta = el('div', 'card-meta');
     meta.appendChild(el('span', '', fmtHp(this.ctx.facade.peakPowerKw(spec, owned.tuning))));
     meta.appendChild(el('span', '', fmtKg(spec.massKg * WEIGHT_STAGES[owned.tuning.weightStage])));
     meta.appendChild(el('span', '', fmtKm(owned.odometerM)));
-    card.el.appendChild(meta);
-    this.list.appendChild(card.el);
-    this.focusItems.push(card.item);
+    row.el.appendChild(meta);
+    this.list.appendChild(row.el);
+    this.focusItems.push(row.item);
   }
 
   private rebuild(): void {
