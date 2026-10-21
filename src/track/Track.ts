@@ -241,7 +241,13 @@ export class Track {
     }
   }
 
-  /** Nearest sample near a previous index (temporal coherence), falling back to a global search. */
+  /**
+   * Nearest sample near a previous index (temporal coherence). Falls back to a global
+   * search when the hinted window is clearly off the circuit (e.g. a heightfield row-scan
+   * that has crossed to another loop of a figure-8). The threshold is tight enough to
+   * catch stale hints but loose enough that the upper/lower decks at a crossover — nearly
+   * coincident in plan view — keep temporal continuity for road-height queries.
+   */
   nearestIndex(pos: Vector3, hint: number | null): number {
     if (hint === null) return this.nearestIndexGlobal(pos);
     const window = 30;
@@ -255,7 +261,10 @@ export class Track {
         best = i;
       }
     }
-    if (bestD > 60 * 60) return this.nearestIndexGlobal(pos);
+    if (bestD > 25 * 25) {
+      const global = this.nearestIndexGlobal(pos);
+      if (distXZ2(this.points[global], pos) < bestD) return global;
+    }
     return best;
   }
 

@@ -63,7 +63,8 @@ export function buildBridgeSupports(track: Track): { group: Group; disposables: 
 
   const pillarGeometry = new BoxGeometry(1.1, 1, 1.1);
   const pillarMaterial = new MeshStandardMaterial({ color: 0x9a968e, roughness: 0.95 });
-  const pillars = new InstancedMesh(pillarGeometry, pillarMaterial, Math.max(1, totalPillars));
+  // Two legs per station (left + right of the deck).
+  const pillars = new InstancedMesh(pillarGeometry, pillarMaterial, Math.max(2, totalPillars * 2));
   pillars.name = 'bridge-pillars';
   pillars.castShadow = true;
   pillars.receiveShadow = true;
@@ -87,10 +88,20 @@ function placePillars(track: Track, runs: number[][], pillars: InstancedMesh): v
       const top = track.points[i].y - 0.3;
       const ground = groundHeightUnder(track, i);
       const height = Math.max(1, top - ground);
-      dummy.position.set(track.points[i].x, ground + height / 2, track.points[i].z);
-      dummy.scale.set(1, height, 1);
-      dummy.updateMatrix();
-      pillars.setMatrixAt(instance++, dummy.matrix);
+      // Legs sit outside the barriers, never on the driving line.
+      const offset = track.barrierDistance(i) + 1.5;
+      for (const sign of [-1, 1] as const) {
+        const p = track.points[i];
+        const r = track.rights[i];
+        dummy.position.set(
+          p.x + r.x * sign * offset,
+          ground + height / 2,
+          p.z + r.z * sign * offset,
+        );
+        dummy.scale.set(1, height, 1);
+        dummy.updateMatrix();
+        pillars.setMatrixAt(instance++, dummy.matrix);
+      }
     }
   }
   pillars.count = instance;

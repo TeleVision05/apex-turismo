@@ -29,9 +29,14 @@ export function buildRoadSurface(track: Track, textures: TextureSet): RoadSurfac
     roughness: 0.85,
     metalness: 0.0,
     side: DoubleSide,
+    // Keep asphalt in front of the terrain/run-off when heights are within a few centimetres.
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const mesh = new Mesh(geometry, material);
   mesh.name = 'road-surface';
   mesh.receiveShadow = true;
+  mesh.renderOrder = 1;
   return { mesh, disposables: { geometries: [geometry], materials: [material], textures: [] } };
 }

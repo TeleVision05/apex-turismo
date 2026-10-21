@@ -1,7 +1,7 @@
 import { Group, Object3D, Vector3 } from 'three';
 import type { Track } from '../../../../track/Track';
-import { frameAtS, placeAt } from '../../furniture/common';
-import { terrainHeightAt } from '../../terrain';
+import { frameAtS, placeAt, yawLookAt } from '../../furniture/common';
+import { corridorFloorAt, terrainHeightAt } from '../../terrain';
 import type { PlacementFrame, Side } from '../types';
 
 const MIN_CLEARANCE_M = 4;
@@ -19,7 +19,10 @@ export function landmarkFrame(
   const lateral = sign * (track.barrierDistance(frame.index) + clearance);
   const x = frame.point.x + frame.right.x * lateral;
   const z = frame.point.z + frame.right.z * lateral;
-  const { y } = terrainHeightAt(track, x, z, frame.index);
+  const { y: rawY } = terrainHeightAt(track, x, z, frame.index);
+  // Match the heightfield carve so buildings are not buried by a neighbouring loop's hills.
+  const floor = corridorFloorAt(track, x, z);
+  const y = floor !== null ? Math.min(rawY, floor) : rawY;
   return {
     position: new Vector3(x, y, z),
     forward: frame.forward,
@@ -36,11 +39,10 @@ export function placeFacing(
   vertical: number,
   rotationDeg = 0,
 ): void {
-  object.up.set(0, 1, 0);
   const p = position.clone();
   p.y += vertical;
   object.position.copy(p);
-  object.lookAt(p.clone().add(forward));
+  yawLookAt(object, p, forward);
   if (rotationDeg) object.rotateY((rotationDeg * Math.PI) / 180);
 }
 

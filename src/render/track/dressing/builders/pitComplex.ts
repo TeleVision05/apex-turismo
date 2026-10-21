@@ -11,70 +11,76 @@ import {
 import type { Disposables } from '../../types';
 import type { DressingContext, PitComplexSpec } from '../types';
 import { PALETTE } from './palette';
+import { yawLookAt } from '../../furniture/common';
 import { landmarkFrame, lateralOffset, newGroup, placeFacing } from './shared';
 
 const HEIGHT_M = 8;
 const WIDTH_M = 15;
+const SEGMENT_M = 15;
 
 interface Built {
   group: Group;
   disposables: Disposables;
 }
 
-/** A long pit building: garages, a roof terrace and a race-control tower. `roof: 'wing'` gives Silverstone's curved-roof look. */
+/** A long pit building: garages, a roof terrace and a race-control tower. Follows the pit-straight arc. */
 export function buildPitComplex(ctx: DressingContext, spec: PitComplexSpec): Built {
   const group = newGroup('dressing-pit-complex');
-  const pf = landmarkFrame(ctx.track, spec.s, spec.side, spec.distance);
   const sign = spec.side === 'left' ? -1 : 1;
   const disposables: Disposables = { geometries: [], materials: [], textures: [] };
   const color = spec.color ?? PALETTE.concrete;
 
-  const body = buildBody(spec, color, pf, sign, group, disposables);
-  buildGarages(spec, pf, sign, group, disposables);
-  if (spec.roof === 'wing') buildWingRoof(spec, pf, sign, group, disposables);
-  else buildFlatRoofTerrace(spec, pf, sign, body.height, group, disposables);
-  buildTower(spec, pf, sign, group, disposables);
+  buildBody(ctx, spec, color, sign, group, disposables);
+  buildGarages(ctx, spec, sign, group, disposables);
+  if (spec.roof === 'wing') buildWingRoof(ctx, spec, sign, group, disposables);
+  else buildFlatRoofTerrace(ctx, spec, sign, group, disposables);
+  buildTower(ctx, spec, sign, group, disposables);
 
   return { group, disposables };
 }
 
 function buildBody(
+  ctx: DressingContext,
   spec: PitComplexSpec,
   color: number,
-  pf: ReturnType<typeof landmarkFrame>,
   sign: number,
   group: Group,
   disposables: Disposables,
-): { height: number } {
-  const geo = new BoxGeometry(WIDTH_M, HEIGHT_M, spec.length);
+): void {
+  const geo = new BoxGeometry(WIDTH_M, HEIGHT_M, SEGMENT_M);
   const mat = new MeshStandardMaterial({ color, roughness: 0.8 });
-  const body = new Mesh(geo, mat);
-  body.castShadow = true;
-  body.receiveShadow = true;
-  placeFacing(body, pf.position, pf.forward, HEIGHT_M / 2, spec.rotationDeg);
-  group.add(body);
-
-  const glassGeo = new BoxGeometry(0.4, HEIGHT_M * 0.55, spec.length * 0.92);
+  const glassGeo = new BoxGeometry(0.4, HEIGHT_M * 0.55, SEGMENT_M * 0.92);
   const glassMat = new MeshStandardMaterial({
     color: PALETTE.glassBlue,
     roughness: 0.15,
     metalness: 0.4,
     emissive: PALETTE.glassEmissive,
   });
-  const glass = new Mesh(glassGeo, glassMat);
-  glass.receiveShadow = true;
-  const glassPos = lateralOffset(pf, sign, -WIDTH_M / 2 - 0.25);
-  placeFacing(glass, glassPos, pf.forward, HEIGHT_M * 0.5, spec.rotationDeg);
-  group.add(glass);
-
   disposables.geometries.push(geo, glassGeo);
   disposables.materials.push(mat, glassMat);
-  return { height: HEIGHT_M };
+
+  const segments = Math.max(1, Math.round(spec.length / SEGMENT_M));
+  for (let s = 0; s < segments; s++) {
+    const along = -spec.length / 2 + (s + 0.5) * (spec.length / segments);
+    const pf = landmarkFrame(ctx.track, spec.s + along, spec.side, spec.distance);
+
+    const body = new Mesh(geo, mat);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    placeFacing(body, pf.position, pf.forward, HEIGHT_M / 2, spec.rotationDeg);
+    group.add(body);
+
+    const glass = new Mesh(glassGeo, glassMat);
+    glass.receiveShadow = true;
+    const glassPos = lateralOffset(pf, sign, -WIDTH_M / 2 - 0.25);
+    placeFacing(glass, glassPos, pf.forward, HEIGHT_M * 0.5, spec.rotationDeg);
+    group.add(glass);
+  }
 }
 
 function buildGarages(
+  ctx: DressingContext,
   spec: PitComplexSpec,
-  pf: ReturnType<typeof landmarkFrame>,
   sign: number,
   group: Group,
   disposables: Disposables,
@@ -83,12 +89,13 @@ function buildGarages(
   const doorMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
   const doors = new InstancedMesh(doorGeo, doorMat, spec.garages);
   const dummy = new Object3D();
-  const doorPos = lateralOffset(pf, sign, WIDTH_M / 2 + 0.1);
   for (let i = 0; i < spec.garages; i++) {
     const along = -spec.length / 2 + (i + 0.5) * (spec.length / spec.garages);
-    dummy.position.copy(doorPos).addScaledVector(pf.forward, along);
+    const pf = landmarkFrame(ctx.track, spec.s + along, spec.side, spec.distance);
+    const doorPos = lateralOffset(pf, sign, WIDTH_M / 2 + 0.1);
+    dummy.position.copy(doorPos);
     dummy.position.y += HEIGHT_M * 0.3;
-    dummy.lookAt(dummy.position.clone().add(pf.forward));
+    yawLookAt(dummy, dummy.position, pf.forward);
     dummy.updateMatrix();
     doors.setMatrixAt(i, dummy.matrix);
     doors.setColorAt(i, new Color(i % 2 === 0 ? 0xe8e8ea : 0xd0d0d4));
@@ -101,34 +108,39 @@ function buildGarages(
 }
 
 function buildFlatRoofTerrace(
+  ctx: DressingContext,
   spec: PitComplexSpec,
-  pf: ReturnType<typeof landmarkFrame>,
   sign: number,
-  bodyHeight: number,
   group: Group,
   disposables: Disposables,
 ): void {
-  const geo = new BoxGeometry(WIDTH_M + 1.5, 0.4, spec.length + 1);
+  const geo = new BoxGeometry(WIDTH_M + 1.5, 0.4, SEGMENT_M + 0.4);
   const mat = new MeshStandardMaterial({ color: PALETTE.roofDark, roughness: 0.6 });
-  const roof = new Mesh(geo, mat);
-  roof.castShadow = true;
-  placeFacing(roof, pf.position, pf.forward, bodyHeight, spec.rotationDeg);
-  group.add(roof);
-
   const railGeo = new BoxGeometry(WIDTH_M + 1.5, 1, 0.1);
-  const rail = new Mesh(railGeo, mat);
-  const railPos = lateralOffset(pf, sign, -WIDTH_M / 2);
-  placeFacing(rail, railPos, pf.forward, bodyHeight + 0.7, spec.rotationDeg);
-  group.add(rail);
-
   disposables.geometries.push(geo, railGeo);
   disposables.materials.push(mat);
+
+  const segments = Math.max(1, Math.round(spec.length / SEGMENT_M));
+  for (let s = 0; s < segments; s++) {
+    const along = -spec.length / 2 + (s + 0.5) * (spec.length / segments);
+    const pf = landmarkFrame(ctx.track, spec.s + along, spec.side, spec.distance);
+
+    const roof = new Mesh(geo, mat);
+    roof.castShadow = true;
+    placeFacing(roof, pf.position, pf.forward, HEIGHT_M, spec.rotationDeg);
+    group.add(roof);
+
+    const rail = new Mesh(railGeo, mat);
+    const railPos = lateralOffset(pf, sign, -WIDTH_M / 2);
+    placeFacing(rail, railPos, pf.forward, HEIGHT_M + 0.7, spec.rotationDeg);
+    group.add(rail);
+  }
 }
 
 /** The Silverstone "Wing": a long, shallow-curved roof made from a fan of tilted panels. */
 function buildWingRoof(
+  ctx: DressingContext,
   spec: PitComplexSpec,
-  pf: ReturnType<typeof landmarkFrame>,
   sign: number,
   group: Group,
   disposables: Disposables,
@@ -138,6 +150,8 @@ function buildWingRoof(
   const mat = new MeshStandardMaterial({ color: 0xe4e6ea, roughness: 0.35, metalness: 0.2 });
   for (let i = 0; i < segments; i++) {
     const t = (i + 0.5) / segments - 0.5;
+    const along = t * spec.length;
+    const pf = landmarkFrame(ctx.track, spec.s + along, spec.side, spec.distance);
     const panel = new Mesh(panelGeo, mat);
     panel.castShadow = true;
     const arc = Math.cos(t * Math.PI * 0.9);
@@ -150,17 +164,16 @@ function buildWingRoof(
   disposables.materials.push(mat);
 }
 
-/** A slender race-control tower: a narrow shaft, a glazed cabin band, and a roof cap — not a plain wide pillar. */
+/** A slender race-control tower: a narrow shaft, a glazed cabin band, and a roof cap. */
 function buildTower(
+  ctx: DressingContext,
   spec: PitComplexSpec,
-  pf: ReturnType<typeof landmarkFrame>,
   sign: number,
   group: Group,
   disposables: Disposables,
 ): void {
+  const pf = landmarkFrame(ctx.track, spec.s + spec.length * 0.42, spec.side, spec.distance);
   const pos = lateralOffset(pf, sign, -WIDTH_M * 0.1);
-  const along = spec.length * 0.42;
-  pos.addScaledVector(pf.forward, along);
 
   const shaftHeight = spec.towerHeight * 0.78;
   const shaftGeo = new CylinderGeometry(1.0, 1.3, shaftHeight, 12);

@@ -3,13 +3,24 @@ import type { Track } from '../../../track/Track';
 import { frameAtS, type TrackFrame } from '../geometryUtils';
 import { wrapIndex } from '../../../core/math';
 
-/** Orients an object so local -Z faces the track's forward direction at that frame, offset laterally + vertically. */
+/** Flatten a direction onto XZ and look along it (keeps buildings level on graded track). */
+export function yawLookAt(object: Object3D, from: Vector3, forward: Vector3): void {
+  object.up.set(0, 1, 0);
+  const aim = new Vector3(forward.x, 0, forward.z);
+  if (aim.lengthSq() < 1e-8) aim.set(0, 0, 1);
+  else aim.normalize();
+  object.lookAt(from.clone().add(aim));
+}
+
+/**
+ * Orients an object so local -Z faces along the track at that frame, offset laterally + vertically.
+ * Yaw-only: forward is flattened onto XZ so grade does not pitch buildings/roofs over the road.
+ */
 export function placeAt(object: Object3D, frame: TrackFrame, lateral: number, vertical = 0): void {
   const pos = frame.point.clone().addScaledVector(frame.right, lateral);
   pos.y += vertical;
   object.position.copy(pos);
-  object.up.set(0, 1, 0);
-  object.lookAt(pos.clone().add(frame.forward));
+  yawLookAt(object, pos, frame.forward);
 }
 
 /** Average curvature sign near a sample index, to tell which way a corner turns. */

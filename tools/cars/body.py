@@ -439,7 +439,9 @@ def build_greenhouse(spec, b, materials):
         kind = _classify_greenhouse_face(f, x, center.z, cv, b)
         if kind is None:
             continue
-        offset = f.normal * 0.005
+        # Hairline proud of the paint so depth-tested glass wins in the
+        # aperture without floating clear of the pillars.
+        offset = f.normal * 0.0015
         new_verts = [glass_bm.verts.new(v.co + offset) for v in f.verts]
         glass_bm.faces.new(new_verts)
 

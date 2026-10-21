@@ -26,7 +26,7 @@ export function loadCarModel(spec: CarSpec): Promise<Group> {
   let p = modelCache.get(spec.model);
   if (!p) {
     p = loader
-      .loadAsync(`${import.meta.env.BASE_URL}models/cars/${spec.model}`)
+      .loadAsync(`${import.meta.env.BASE_URL}models/cars/${spec.model}?v=7`)
       .then((gltf) => gltf.scene)
       .catch(() => buildFallbackCar(spec));
     modelCache.set(spec.model, p);
@@ -40,12 +40,18 @@ const WHEEL_NAMES = ['Wheel_FL', 'Wheel_FR', 'Wheel_RL', 'Wheel_RR'];
 const MATERIALS: Record<string, MeshStandardMaterialParameters & MeshPhysicalMaterialParameters> = {
   Glass: {
     name: 'Glass',
-    color: 0x0a0c10,
-    metalness: 0.2,
-    roughness: 0.03,
+    color: 0x1a222c,
+    metalness: 0,
+    roughness: 0.08,
+    transmission: 0.75,
+    thickness: 0.015,
+    ior: 1.45,
     transparent: true,
-    opacity: 0.55,
-    envMapIntensity: 1.6,
+    opacity: 0.92,
+    // depthWrite must stay on — with it off, glass always paints over the
+    // body and reads as panes floating outside the pillars.
+    depthWrite: true,
+    envMapIntensity: 1.0,
   },
   Chrome: { name: 'Chrome', color: 0xdddddd, metalness: 1, roughness: 0.12, envMapIntensity: 1.5 },
   Rim: { name: 'Rim', color: 0x9a9a9e, metalness: 0.95, roughness: 0.3, envMapIntensity: 1.3 },
@@ -104,6 +110,16 @@ export class CarVisual {
         o.castShadow = true;
         o.receiveShadow = false;
         o.material = this.materialFor(o.material as Material, color);
+        // Synth glass cards (low tri) — pull toward car centre. Peeled glass
+        // keeps authored scale and sorts with the body via depthWrite.
+        if (o.name === 'Glass' || (o.material as Material).name === 'Glass') {
+          const tris = o.geometry.index
+            ? o.geometry.index.count / 3
+            : o.geometry.getAttribute('position').count / 3;
+          if (tris < 80) {
+            o.scale.set(0.92, 0.97, 0.92);
+          }
+        }
       }
       const idx = WHEEL_NAMES.indexOf(o.name);
       if (idx >= 0) {

@@ -10,7 +10,7 @@ import {
   Object3D,
   PlaneGeometry,
 } from 'three';
-import { frameAtS } from '../../furniture/common';
+import { frameAtS, yawLookAt } from '../../furniture/common';
 import { canvasTextTexture } from '../../textures';
 import type { Disposables } from '../../types';
 import type { AdBoardRunRegion, ApexBoardSpec, DressingContext, FlagRowRegion } from '../types';
@@ -70,8 +70,7 @@ export function buildAdBoardRun(
         frame.point.y + 0.6,
         frame.point.z + frame.right.z * lateral,
       );
-      dummy.up.set(0, 1, 0);
-      dummy.lookAt(dummy.position.clone().add(frame.forward));
+      yawLookAt(dummy, dummy.position, frame.forward);
       dummy.updateMatrix();
       boards.setMatrixAt(i, dummy.matrix);
       boards.setColorAt(
@@ -123,8 +122,7 @@ export function buildFlagRow(
       dummy.updateMatrix();
       poles.setMatrixAt(i, dummy.matrix);
       dummy.position.set(base.x, base.y + 4, base.z);
-      dummy.up.set(0, 1, 0);
-      dummy.lookAt(dummy.position.clone().add(frame.forward));
+      yawLookAt(dummy, dummy.position, frame.forward);
       dummy.updateMatrix();
       flags.setMatrixAt(i, dummy.matrix);
       flags.setColorAt(i, new Color(pick(STRIPE_COLORS, i)));

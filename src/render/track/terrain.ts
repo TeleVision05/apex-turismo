@@ -7,7 +7,7 @@ import type { Disposables } from './types';
 
 const MARGIN_M = 500;
 /** Grid step; kept uniform since even the largest track stays well under the ~600k vertex budget at this step. */
-const RESOLUTION_M = 5;
+export const RESOLUTION_M = 5;
 const HILL_AMPLITUDE = 25;
 /** How far the flat, always-below-the-road corridor floor sits beneath the nearest road sample. */
 const RUNOFF_DROP = 0.4;
@@ -28,6 +28,11 @@ const AVERAGE_SIGMA_M = 20;
  */
 const BLUR_MARGIN_M = 2;
 const BLUR_PASSES = 2;
+/**
+ * Extra radius when carving corridors into the finished heightfield so a grid triangle that
+ * covers the road cannot interpolate above it from a high neighbour outside the corridor.
+ */
+const GRID_CARVE_PAD_M = RESOLUTION_M * Math.SQRT2;
 
 interface Bounds {
   minX: number;
@@ -128,6 +133,28 @@ export interface TerrainHeightSample {
   corridorEdge: number;
 }
 
+/**
+ * Lowest corridor floor among every centreline sample whose circular corridor (barrier +
+ * margin + optional pad) covers (x, z). Returns null when the point sits outside every
+ * corridor. Used for dressing/trees and as the source of truth for the heightfield carve so
+ * a wrong nearest-loop pick cannot bury the road or buildings on a figure-8.
+ */
+export function corridorFloorAt(track: Track, x: number, z: number, padM = 0): number | null {
+  let floor: number | null = null;
+  for (let i = 0; i < track.n; i++) {
+    const p = track.points[i];
+    const edge = track.barrierDistance(i) + CORRIDOR_MARGIN_M + padM;
+    const dx = x - p.x;
+    if (dx > edge || dx < -edge) continue;
+    const dz = z - p.z;
+    if (dz > edge || dz < -edge) continue;
+    if (dx * dx + dz * dz > edge * edge) continue;
+    const f = roadHeightAt(track, i) - RUNOFF_DROP;
+    floor = floor === null ? f : Math.min(floor, f);
+  }
+  return floor;
+}
+
 /** Height + local track-relative info at an arbitrary world (x,z), via Track's own spatial hash (not O(n^2)). */
 export function terrainHeightAt(
   track: Track,
@@ -150,7 +177,17 @@ export function terrainHeightAt(
   const t = smoothstep(0, HILL_BLEND_M, distBeyondCorridor);
   // At t=0 (the corridor boundary) this is exactly minRoad - RUNOFF_DROP, matching the corridor
   // rule with no seam; as t grows the smoothly-averaged hillY quickly takes over.
-  const y = lerp(minRoad - RUNOFF_DROP, hillY, t);
+  let y = lerp(minRoad - RUNOFF_DROP, hillY, t);
+  // Outside the primary corridor, another loop of a figure-8 / parallel may still claim this
+  // point. Skip the O(n) scan when even the nearest sample is farther than any corridor.
+  if (distBeyondCorridor > 0) {
+    const near = track.points[q2.index];
+    const nearDistSq = (x - near.x) * (x - near.x) + (z - near.z) * (z - near.z);
+    if (nearDistSq < 40 * 40) {
+      const multiFloor = corridorFloorAt(track, x, z);
+      if (multiFloor !== null) y = Math.min(y, multiFloor);
+    }
+  }
   return { y, hint: q2.index, lateral: q2.lateral, corridorEdge };
 }
 
@@ -201,6 +238,45 @@ function blurHeights(positions: Float32Array, mask: Uint8Array, cols: number, ro
   }
 }
 
+/**
+ * Stamps every centreline sample's corridor into the heightfield (and optionally clears the
+ * blur mask). Sample-centric so cost is O(samples × cells-per-corridor), not O(grid × samples).
+ */
+function stampCorridors(
+  positions: Float32Array,
+  blurMask: Uint8Array | null,
+  track: Track,
+  bounds: Bounds,
+  cols: number,
+  rows: number,
+  padM: number,
+  carveHeights: boolean,
+): void {
+  const stride = cols + 1;
+  for (let i = 0; i < track.n; i++) {
+    const p = track.points[i];
+    const edge = track.barrierDistance(i) + CORRIDOR_MARGIN_M + padM;
+    const floor = roadHeightAt(track, i) - RUNOFF_DROP;
+    const edgeSq = edge * edge;
+    const col0 = Math.max(0, Math.floor((p.x - edge - bounds.minX) / RESOLUTION_M));
+    const col1 = Math.min(cols, Math.ceil((p.x + edge - bounds.minX) / RESOLUTION_M));
+    const row0 = Math.max(0, Math.floor((p.z - edge - bounds.minZ) / RESOLUTION_M));
+    const row1 = Math.min(rows, Math.ceil((p.z + edge - bounds.minZ) / RESOLUTION_M));
+    for (let row = row0; row <= row1; row++) {
+      for (let col = col0; col <= col1; col++) {
+        const idx = row * stride + col;
+        const x = bounds.minX + col * RESOLUTION_M;
+        const z = bounds.minZ + row * RESOLUTION_M;
+        const dx = x - p.x;
+        const dz = z - p.z;
+        if (dx * dx + dz * dz > edgeSq) continue;
+        if (blurMask) blurMask[idx] = 0;
+        if (carveHeights && positions[idx * 3 + 1] > floor) positions[idx * 3 + 1] = floor;
+      }
+    }
+  }
+}
+
 /** A heightfield grid over the track bounds + margin, following track height near the road and rolling hills further out. */
 export function buildTerrain(track: Track, textures: TextureSet): TerrainBuild {
   const bounds = computeBounds(track);
@@ -209,25 +285,29 @@ export function buildTerrain(track: Track, textures: TextureSet): TerrainBuild {
   const positions = new Float32Array((cols + 1) * (rows + 1) * 3);
   const uvs = new Float32Array((cols + 1) * (rows + 1) * 2);
   const blurMask = new Uint8Array((cols + 1) * (rows + 1));
-  let hint = 0;
+  blurMask.fill(1);
+  const probe = new Vector3();
   let p = 0;
   let u = 0;
-  let v = 0;
   for (let row = 0; row <= rows; row++) {
     for (let col = 0; col <= cols; col++) {
       const x = bounds.minX + col * RESOLUTION_M;
       const z = bounds.minZ + row * RESOLUTION_M;
-      const h = terrainHeightAt(track, x, z, hint);
-      hint = h.hint;
+      // Seed each vertex from a global nearest so a row-scan hint cannot stick to the wrong loop.
+      const seed = track.nearestIndexGlobal(probe.set(x, 0, z));
+      const h = terrainHeightAt(track, x, z, seed);
       positions[p++] = x;
       positions[p++] = h.y;
       positions[p++] = z;
       uvs[u++] = x / 4000;
       uvs[u++] = z / 4000;
-      blurMask[v++] = Math.abs(h.lateral) > h.corridorEdge + BLUR_MARGIN_M ? 1 : 0;
     }
   }
+  // Protect every loop's corridor from the blur, then smooth hills, then carve (incl. grid pad)
+  // so triangle interpolation cannot rise above the road between a flat corridor vertex and a hill.
+  stampCorridors(positions, blurMask, track, bounds, cols, rows, BLUR_MARGIN_M, false);
   blurHeights(positions, blurMask, cols, rows);
+  stampCorridors(positions, null, track, bounds, cols, rows, GRID_CARVE_PAD_M, true);
   const indices: number[] = [];
   const stride = cols + 1;
   for (let row = 0; row < rows; row++) {

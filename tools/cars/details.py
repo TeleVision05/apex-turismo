@@ -309,34 +309,38 @@ def _swept_strip(name, curves, bounds, x_samples, half_w_scale, z_fn,
 
 
 def build_bumper_lips(spec, curves, bounds, materials):
+    """Single lower valance ribbon per end — hugs the floor curve so it reads
+    as the bottom of the bumper, not a second shelf mid-fascia."""
     L = curves["L"]
-    front_x = [0.0, 0.03 * L, 0.06 * L, 0.10 * L, 0.15 * L]
+    front_x = [0.0, 0.04 * L, 0.08 * L, 0.12 * L]
     rear_x = [L - x for x in reversed(front_x)]
-    z_f = lambda x: curves["zf"](x) * 0.55
-    front = _swept_strip("BumperLip_F", curves, bounds, front_x, 0.86, z_f,
-                          0.03, materials["Trim"])
-    rear = _swept_strip("BumperLip_R", curves, bounds, rear_x, 0.86, z_f,
-                         0.03, materials["Trim"])
+    # Keep the lip on the underside of the fascia (zf + thin half-height).
+    z_f = lambda x: curves["zf"](x) + 0.012
+    front = _swept_strip("BumperLip_F", curves, bounds, front_x, 0.88, z_f,
+                          0.018, materials["Trim"])
+    rear = _swept_strip("BumperLip_R", curves, bounds, rear_x, 0.88, z_f,
+                         0.018, materials["Trim"])
     return [front, rear]
 
 
 def build_front_bumper_detail(spec, curves, bounds, materials):
-    """A separate lower-bumper intake (recessed dark opening) plus two fog
-    -lamp recesses either side of it, sat just above the splitter/lip.
+    """Lower-bumper intake + fog lamps seated on the same shelf as the lip
+    so the nose reads as one bumper, not stacked bars.
     Returns (trim_parts, chrome_parts, headlight_lens_parts)."""
     nose_x = 0.015 * curves["L"]
     y = body.blender_y(nose_x, bounds) - 0.01
-    z = curves["zf"](0.0) + 0.10
-    hw = spec["width"] * 0.16
-    hh = 0.055
+    # Same height band as BumperLip_F (zf + ~1–3cm).
+    z = curves["zf"](0.0) + 0.035
+    hw = spec["width"] * 0.14
+    hh = 0.040
     trim = [_box_obj("LowerIntake_backing", (hw * 2, 0.02, hh * 2),
-                      (0, y - 0.035, z), materials["Trim"])]
-    trim.extend(_mesh_grille_bars("LowerIntake", hw, hh, y - 0.015, z,
+                      (0, y - 0.03, z), materials["Trim"])]
+    trim.extend(_mesh_grille_bars("LowerIntake", hw, hh, y - 0.012, z,
                                    materials, vertical=False, bar_count=4))
     chrome_parts, lens = [], []
     for sx in (-1, 1):
-        fog_x = sx * spec["width"] * 0.32
-        t, c, l = _compound_round_light("FogLamp", fog_x, y, z, 0.035,
+        fog_x = sx * spec["width"] * 0.30
+        t, c, l = _compound_round_light("FogLamp", fog_x, y, z, 0.028,
                                          materials, "Headlight", chrome=True)
         trim += t; chrome_parts += c; lens += l
     return trim, chrome_parts, lens

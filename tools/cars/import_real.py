@@ -58,7 +58,7 @@ SOURCE_NOSE_FLIP = {
 
 # --- keyword classification (checked against "<object name> <material
 # name>", lowercased) -----------------------------------------------------
-GLASS_KW = ("glass", "window", "windshield", "windscreen")
+GLASS_KW = ("glass", "window", "windshield", "windscreen", "windo", "glazing", "vitre")
 STEERING_KW = ("steering",)
 INTERIOR_KW = ("interior", "seat", "dash", "carpet", "cabin", "leather")
 HEADLIGHT_KW = ("headlight", "head_light", "headlamp", "projector")
@@ -158,6 +158,13 @@ def _clear_and_set_material(obj, mat):
     obj.data.materials.append(mat)
     for p in obj.data.polygons:
         p.material_index = 0
+
+
+def _new_object(name):
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    return obj
 
 
 def _recalc_normals_outward(obj):
@@ -606,8 +613,10 @@ def _prim(kind, size, loc, name):
     if kind == "cube":
         obj.scale = size
         bpy.context.view_layer.update()
-        _select_only([obj])
-        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    # Bake location/scale into verts so later joins and cabin clamps see
+    # world-space coordinates (object.location alone was lost / misread).
+    _select_only([obj])
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     return obj
 
 
@@ -643,6 +652,205 @@ def _find_roof_span(body_frags, height):
     return (y_lo + lo_bin * width, y_lo + (hi_bin + 1) * width)
 
 
+def _cabin_half_width(body_frags, z_lo, z_hi):
+    """Half-width of the greenhouse in a height band. Uses a high percentile
+    (not max) so a single shoulder/flare vertex cannot push side glass outside
+    the tumblehome."""
+    xs = []
+    for f in body_frags:
+        for v in f.data.vertices:
+            if z_lo <= v.co.z <= z_hi:
+                xs.append(abs(v.co.x))
+    if not xs:
+        return None
+    xs.sort()
+    return xs[min(len(xs) - 1, int(len(xs) * 0.82))]
+
+
+def _outward_glass_normal(n, c):
+    """Peel faces often inherit inward body normals; force them to face out
+    of the cabin so the inset offset pulls glass *in*, not proud of paint."""
+    n = n.normalized()
+    if abs(n.x) >= abs(n.y) and abs(n.x) >= abs(n.z):
+        if n.x * c.x < 0:
+            n = -n
+    elif abs(n.y) >= abs(n.z):
+        # Windscreen (+Y nose) / rear screen (-Y).
+        if (c.y >= 0 and n.y < 0) or (c.y < 0 and n.y > 0):
+            n = -n
+    return n
+
+
+def _cabin_hw_lookup(body_frags, z_lo, z_hi, bins=48):
+    """Per-Y half-width of the body in a cabin height band, for clamping
+    peeled glass so side panes never sit outside the shell."""
+    pts = []
+    for body in body_frags:
+        for v in body.data.vertices:
+            if z_lo <= v.co.z <= z_hi:
+                pts.append((v.co.y, abs(v.co.x)))
+    if len(pts) < 8:
+        return None
+    y_lo = min(p[0] for p in pts)
+    y_hi = max(p[0] for p in pts)
+    if y_hi - y_lo < 1e-3:
+        return None
+    width = (y_hi - y_lo) / bins
+    buckets = [[] for _ in range(bins)]
+    for y, ax in pts:
+        i = min(bins - 1, max(0, int((y - y_lo) / width)))
+        buckets[i].append(ax)
+    hw = []
+    for b in buckets:
+        if not b:
+            hw.append(0.0)
+            continue
+        b = sorted(b)
+        hw.append(b[min(len(b) - 1, int(len(b) * 0.82))])
+    # Fill empty bins from neighbours so clamps stay continuous.
+    for i in range(bins):
+        if hw[i] > 0:
+            continue
+        for d in range(1, bins):
+            lo = hw[i - d] if i - d >= 0 else 0.0
+            hi = hw[i + d] if i + d < bins else 0.0
+            if lo or hi:
+                hw[i] = max(lo, hi)
+                break
+    return y_lo, width, hw
+
+
+def _peel_glass_from_body(buckets, dims):
+    """When the source has no named Glass parts, copy window-like faces into
+    a Glass mesh inset into the cabin. Body is left intact (paint stays under
+    the glass) so low-poly shells never lose silhouette. Restricted to the
+    detected roof/cabin Y-span so door skins and fenders are not mistaken
+    for glass."""
+    H, W = dims["height"], dims["width"]
+    span = _find_roof_span(buckets["Body"], H)
+    if span is None:
+        return False
+    y_lo, y_hi = span
+    cabin_len = max(0.2, y_hi - y_lo)
+    # Screens need a little pad; side glass stays in the middle of the cabin
+    # so C-pillar / quarter-panel faces are not mistaken for panes.
+    y_side_lo = y_lo + cabin_len * 0.12
+    y_side_hi = y_hi - cabin_len * 0.12
+    y_wind_lo = y_lo + cabin_len * 0.45
+    y_back_hi = y_lo + cabin_len * 0.40
+    hw_lut = _cabin_hw_lookup(buckets["Body"], H * 0.55, H * 0.95)
+    glass_meshes = []
+    for body in list(buckets["Body"]):
+        bm = bmesh.new()
+        bm.from_mesh(body.data)
+        bm.faces.ensure_lookup_table()
+        bm.normal_update()
+        to_peel = []
+        for f in bm.faces:
+            c = f.calc_center_median()
+            n = f.normal.normalized()
+            if c.z < H * 0.58 or c.z > H * 0.96:
+                continue
+            if abs(n.z) > 0.50:
+                continue
+            side = (abs(n.x) > 0.70 and abs(c.x) > W * 0.28
+                    and y_side_lo <= c.y <= y_side_hi)
+            wind = n.y > 0.45 and c.y >= y_wind_lo and abs(c.x) < W * 0.45
+            back = n.y < -0.45 and c.y <= y_back_hi and abs(c.x) < W * 0.45
+            if side or wind or back:
+                to_peel.append(f)
+        if len(to_peel) < 4:
+            bm.free()
+            continue
+        glass_bm = bmesh.new()
+        for f in to_peel:
+            c = f.calc_center_median()
+            n = _outward_glass_normal(f.normal, c)
+            # Deep under the paint shell. On solid low-poly bodies (no window
+            # holes) anything near the surface z-fights and reads as panes
+            # glued on the outside; sitting inside the cabin only adds tint
+            # when a real aperture exists.
+            offset = -n * 0.03
+            verts = [glass_bm.verts.new(v.co + offset) for v in f.verts]
+            try:
+                glass_bm.faces.new(verts)
+            except ValueError:
+                pass
+        bm.free()
+        if not glass_bm.faces:
+            glass_bm.free()
+            continue
+        # Clamp side verts inside the local body half-width so a flipped
+        # normal cannot leave glass proud of the door skin.
+        if hw_lut is not None:
+            y0, bin_w, hw = hw_lut
+            glass_bm.verts.ensure_lookup_table()
+            for v in glass_bm.verts:
+                i = min(len(hw) - 1, max(0, int((v.co.y - y0) / bin_w)))
+                limit = hw[i] * 0.97 if hw[i] > 0.05 else None
+                if limit is not None and abs(v.co.x) > limit:
+                    v.co.x = limit if v.co.x > 0 else -limit
+        bmesh.ops.recalc_face_normals(glass_bm, faces=glass_bm.faces)
+        obj = _new_object("Glass_peeled")
+        glass_bm.to_mesh(obj.data)
+        glass_meshes.append(obj)
+        glass_bm.free()
+    if glass_meshes:
+        buckets["Glass"] = glass_meshes
+        return True
+    return False
+
+
+def _synth_rocker_trim(dims, body_frags=None):
+    """Contract requires a Trim object. Tiny door-handle blisters on the
+    flanks — never a bar under the nose (that read as a second bumper)."""
+    W, H, WB = dims["width"], dims["height"], dims["wheelbase"]
+    z = H * 0.42
+    y = WB * 0.08
+    hw = W * 0.46
+    if body_frags:
+        xs = []
+        for b in body_frags:
+            for v in b.data.vertices:
+                if abs(v.co.z - z) < 0.06 and abs(v.co.y - y) < 0.15:
+                    xs.append(abs(v.co.x))
+        if xs:
+            hw = max(xs) * 0.995
+    return [
+        _prim("cube", (0.012, 0.055, 0.022), (hw, y, z), "trim_handle_l"),
+        _prim("cube", (0.012, 0.055, 0.022), (-hw, y, z), "trim_handle_r"),
+    ]
+
+
+def _seat_glass_in_cabin(buckets, dims):
+    """Final pass: pull any Glass verts that still sit outside the cabin
+    shell back inside (covers named source glass as well as peels/synths)."""
+    if not buckets.get("Glass") or not buckets.get("Body"):
+        return
+    H = dims["height"]
+    hw_lut = _cabin_hw_lookup(buckets["Body"], H * 0.55, H * 0.95)
+    if hw_lut is None:
+        return
+    y0, bin_w, hw = hw_lut
+    for glass in buckets["Glass"]:
+        bm = bmesh.new()
+        bm.from_mesh(glass.data)
+        bm.verts.ensure_lookup_table()
+        changed = False
+        for v in bm.verts:
+            if v.co.z < H * 0.50:
+                continue
+            i = min(len(hw) - 1, max(0, int((v.co.y - y0) / bin_w)))
+            limit = hw[i] * 0.88 if hw[i] > 0.05 else None
+            if limit is not None and abs(v.co.x) > limit:
+                v.co.x = limit if v.co.x > 0 else -limit
+                changed = True
+        if changed:
+            bm.to_mesh(glass.data)
+            glass.data.update()
+        bm.free()
+
+
 def synthesize_missing(buckets, dims, mats):
     """dims: dict with length/width/height/wheelbase (all target-scale,
     car already centred at wheelbase midpoint with ground at Z=0)."""
@@ -650,34 +858,40 @@ def synthesize_missing(buckets, dims, mats):
     front_y, rear_y = WB / 2.0 + (L - WB) * 0.35, -WB / 2.0 - (L - WB) * 0.35
 
     if not buckets["Glass"]:
-        # deliberately conservative (smaller than a real greenhouse) - this
-        # only fires for sources with no separable window geometry at all,
-        # and an axis-aligned box proxy that undershoots the glass area
-        # reads far better than one that pokes through the roofline of a
-        # sloped fastback/notchback silhouette it has no knowledge of.
-        panels = []
-        beltline, roof = H * 0.60, H * 0.88
-        pane_h = roof - beltline
-        span = _find_roof_span(buckets["Body"], H)
-        if span is not None:
-            y_lo, y_hi = span
-            cabin_len = y_hi - y_lo
-            wind_y0, wind_y1 = y_lo + cabin_len * 0.60, y_hi - cabin_len * 0.04
-            back_y0, back_y1 = y_lo + cabin_len * 0.04, y_lo + cabin_len * 0.40
-            side_y0, side_y1 = y_lo + cabin_len * 0.10, y_hi - cabin_len * 0.10
-        else:
-            wind_y0, wind_y1 = 0.36 * WB, 0.52 * WB
-            back_y0, back_y1 = -0.50 * WB, -0.36 * WB
-            side_y0, side_y1 = -0.17 * WB, 0.17 * WB
-        for nm, y0, y1 in (("wind", wind_y0, wind_y1), ("back", back_y0, back_y1)):
-            loc = (0.0, (y0 + y1) / 2, (beltline + roof) / 2)
-            size = (W * 0.72, min(0.08, abs(y1 - y0)), pane_h)
-            panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
-        for nm, x in (("left", -W * 0.46), ("right", W * 0.46)):
-            loc = (x, (side_y0 + side_y1) / 2, (beltline + roof) / 2)
-            size = (0.03, abs(side_y1 - side_y0), pane_h)
-            panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
-        buckets["Glass"] = panels
+        # Prefer a copy-only peel of real window faces (follows the shell, so
+        # panes stay flush). Flat synth cards poke through solid low-poly
+        # paint; deleting peeled faces tore pillars — never delete.
+        if not _peel_glass_from_body(buckets, dims):
+            panels = []
+            beltline, roof = H * 0.60, H * 0.88
+            pane_h = max(0.12, roof - beltline)
+            span = _find_roof_span(buckets["Body"], H)
+            if span is not None:
+                y_lo, y_hi = span
+                cabin_len = max(0.4, y_hi - y_lo)
+                wind_y0, wind_y1 = y_lo + cabin_len * 0.62, y_hi - cabin_len * 0.04
+                back_y0, back_y1 = y_lo + cabin_len * 0.04, y_lo + cabin_len * 0.32
+                side_y0, side_y1 = y_lo + cabin_len * 0.18, y_hi - cabin_len * 0.18
+            else:
+                wind_y0, wind_y1 = 0.36 * WB, 0.52 * WB
+                back_y0, back_y1 = -0.50 * WB, -0.36 * WB
+                side_y0, side_y1 = -0.17 * WB, 0.17 * WB
+            z_mid = (beltline + roof) / 2
+            cabin_hw = _cabin_half_width(
+                buckets["Body"], z_mid - pane_h * 0.25, z_mid + pane_h * 0.25
+            ) or (W * 0.38)
+            side_x = max(0.10, cabin_hw * 0.78)
+            screen_w = min(W * 0.58, cabin_hw * 1.45)
+            for nm, y0, y1 in (("wind", wind_y0, wind_y1), ("back", back_y0, back_y1)):
+                loc = (0.0, (y0 + y1) / 2, z_mid)
+                size = (screen_w, min(0.022, abs(y1 - y0)), pane_h * 0.78)
+                panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
+            side_len = abs(side_y1 - side_y0) * 0.72
+            for nm, x in (("left", -side_x), ("right", side_x)):
+                loc = (x, (side_y0 + side_y1) / 2, z_mid)
+                size = (0.010, side_len, pane_h * 0.72)
+                panels.append(_prim("cube", size, loc, f"glass_synth_{nm}"))
+            buckets["Glass"] = panels
 
     if not buckets["Headlights"]:
         z = H * 0.34
@@ -711,9 +925,7 @@ def synthesize_missing(buckets, dims, mats):
         buckets["SteeringWheel"] = [o]
 
     if not buckets["Trim"]:
-        buckets["Trim"] = [
-            _prim("cube", (W * 0.46, 0.05, 0.02), (0.0, front_y + 0.05, 0.03), "trim_synth"),
-        ]
+        buckets["Trim"] = _synth_rocker_trim(dims, buckets.get("Body"))
     return buckets
 
 
@@ -915,6 +1127,7 @@ def main():
     dims = dict(length=spec["length"], width=spec["width"], height=spec["height"],
                 wheelbase=spec["wheelbase"])
     buckets = synthesize_missing(buckets, dims, mats)
+    _seat_glass_in_cabin(buckets, dims)
 
     # verify.py requires Chrome fragments within 17cm of the body surface
     # (a much tighter budget than Trim's 45cm, reserved for exhaust tips
@@ -952,14 +1165,8 @@ def main():
         buckets["Trim"] = still_trim
         if not buckets["Trim"]:
             # every candidate got rerouted to Body - Trim is still a
-            # required contract object, so fall back to the same small
-            # synthetic placeholder synthesize_missing() would have used
-            # had the source had no trim-ish material at all.
-            L, W, H, WB = dims["length"], dims["width"], dims["height"], dims["wheelbase"]
-            front_y = WB / 2.0 + (L - WB) * 0.35
-            buckets["Trim"] = [
-                _prim("cube", (W * 0.46, 0.05, 0.02), (0.0, front_y + 0.05, 0.03), "trim_synth2"),
-            ]
+            # required contract object; use rocker strips, never a nose bar.
+            buckets["Trim"] = _synth_rocker_trim(dims, buckets.get("Body"))
 
     bucket_to_mat = {"Body": "Paint", "Glass": "Glass", "Trim": "Trim", "Chrome": "Chrome",
                       "Headlights": "Headlight", "Taillights": "Taillight",
