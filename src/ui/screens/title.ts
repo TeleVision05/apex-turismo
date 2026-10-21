@@ -15,17 +15,32 @@ export function createTitleScreen(ctx: ScreenContext): Screen {
   const driverCredit = el('div', 'driver-credit', '');
   wrap.appendChild(driverCredit);
 
+  let armed = false;
   const enter = (): void => {
+    if (!armed) return;
+    armed = false;
+    window.removeEventListener('keydown', onKey);
     ctx.facade.showroom(null);
     ctx.sound('confirm');
     ctx.show('home');
+  };
+  const onKey = (): void => {
+    enter();
   };
 
   root.addEventListener('click', enter);
 
   return {
     el: root,
-    onShow: () => ctx.facade.showroom(null),
+    onShow: () => {
+      armed = true;
+      window.addEventListener('keydown', onKey);
+      ctx.facade.showroom(null);
+    },
+    onHide: () => {
+      armed = false;
+      window.removeEventListener('keydown', onKey);
+    },
     render: () => {
       driverCredit.textContent = `Driver: ${ctx.facade.save.driverName}`;
     },
