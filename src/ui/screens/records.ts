@@ -7,7 +7,13 @@ import type { FocusItem } from '../Focus';
 /** Records: every saved best lap, sorted by track. */
 export function createRecordsScreen(ctx: ScreenContext): Screen {
   const root = el('div', 'screen screen-records');
-  const shell = makeMenuShell('Career', 'Records', { wide: true });
+  const shell = makeMenuShell('Career', 'Records', {
+    wide: true,
+    onBack: () => {
+      ctx.sound('back');
+      ctx.back();
+    },
+  });
   const body = el('div', 'menu-scroll');
   shell.body.appendChild(body);
   root.appendChild(shell.el);
@@ -16,6 +22,7 @@ export function createRecordsScreen(ctx: ScreenContext): Screen {
 
   function rebuild(): void {
     focusItems = [];
+    if (shell.backItem) focusItems.push(shell.backItem);
     clear(body);
     const { records } = ctx.facade.save;
     if (!records.length) {

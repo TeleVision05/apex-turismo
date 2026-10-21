@@ -162,6 +162,7 @@ class UiApp {
     if (input.menuBack) {
       if (suppressBack) return;
       if (screen.interceptBack?.()) return;
+      this.facade.playUiSound('back');
       this.goBack();
       return;
     }

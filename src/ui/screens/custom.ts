@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
 import { makeButton, makeCycle, makeMenuShell, makeSlider, makeToggle } from '../widgets';
+import type { MenuShell } from '../widgets';
 import {
   DIFFICULTY_OPTIONS,
   TIME_OF_DAY_OPTIONS,
@@ -25,15 +26,21 @@ interface CustomState {
 /** Custom Race: full free setup form, starts with facade.startRace(). */
 class CustomScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private state: CustomState;
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-custom');
-    const shell = makeMenuShell('One-off race', 'Custom Race');
-    shell.body.appendChild(this.body);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('One-off race', 'Custom Race', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.appendChild(this.body);
+    this.el.appendChild(this.shell.el);
     this.state = {
       trackId: '',
       laps: 3,
@@ -150,6 +157,7 @@ class CustomScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.body);
     const tracks = this.ctx.facade.tracks();
     if (!tracks.find((t) => t.id === this.state.trackId)) this.state.trackId = tracks[0]?.id ?? '';

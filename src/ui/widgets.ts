@@ -32,27 +32,35 @@ export interface MenuShell {
   el: HTMLElement;
   /** Append the screen's own content (lists, forms, detail panels) here. */
   body: HTMLElement;
+  /** Focus item for the header Back control when `onBack` was provided. */
+  backItem?: FocusItem;
 }
 
 /**
  * The full-height left menu column shared by every menu screen: a scrim over
- * the 3D scene, a hairline right edge, and an overline + title header. Not a
- * floating rounded panel.
+ * the 3D scene, a hairline right edge, optional Back control, and an overline
+ * + title header. Not a floating rounded panel.
  */
 export function makeMenuShell(
   section: string,
   title: string,
-  opts?: { wide?: boolean },
+  opts?: { wide?: boolean; onBack?: () => void },
 ): MenuShell {
   const root = el('div', 'menu-screen');
   root.appendChild(el('div', 'menu-scrim'));
   const col = el('div', `menu-col${opts?.wide ? ' wide' : ''}`);
   const header = el('div', 'menu-header');
+  let backItem: FocusItem | undefined;
+  if (opts?.onBack) {
+    const back = makeButton('Back', opts.onBack, { className: 'menu-back ghost', icon: 'back' });
+    header.appendChild(back.el);
+    backItem = back.item;
+  }
   header.append(el('div', 'overline', section), el('h1', 'menu-title', title));
   const body = el('div', 'menu-body');
   col.append(header, body);
   root.appendChild(col);
-  return { el: root, body };
+  return { el: root, body, backItem };
 }
 
 function rowShell(label: string): { row: HTMLElement; value: HTMLElement } {

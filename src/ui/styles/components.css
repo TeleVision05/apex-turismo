@@ -50,10 +50,33 @@
   color: var(--accent);
 }
 
+.gt-btn.ghost {
+  border-color: transparent;
+  color: var(--text-dim);
+  padding: 6px 10px 6px 4px;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+}
+
+.gt-btn.ghost:hover,
+.gt-btn.ghost.focused {
+  border-color: transparent;
+  color: var(--text);
+  background: transparent;
+}
+
+.gt-btn.ghost .gt-btn-icon {
+  color: inherit;
+}
+
 .gt-btn.primary {
   background: var(--accent);
   color: var(--accent-text);
   border-color: var(--accent);
+}
+
+.gt-btn.block {
+  width: 100%;
 }
 
 .gt-btn.primary:hover,

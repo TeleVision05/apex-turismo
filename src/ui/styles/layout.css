@@ -32,11 +32,10 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--line);
-  padding: clamp(28px, 4vh, 48px) var(--menu-pad-x) clamp(24px, 3vh, 36px);
-  /* Safety net for very short viewports: the column itself scrolls rather
-     than clipping a detail panel that couldn't fit even after the inner
-     list hit its min-height floor. */
-  overflow-y: auto;
+  padding: clamp(24px, 3.5vh, 40px) var(--menu-pad-x) clamp(20px, 2.8vh, 28px);
+  /* Inner list / detail-scroll handle overflow so Back and primary actions
+     stay pinned instead of scrolling off the column. */
+  overflow: hidden;
 }
 
 .menu-col.wide {
@@ -45,12 +44,17 @@
 
 .menu-header {
   flex: 0 0 auto;
-  margin-bottom: var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+
+.menu-header .menu-back {
+  margin: 0 0 var(--sp-3);
+  align-self: flex-start;
 }
 
 .menu-title {
   font-weight: 700;
-  font-size: clamp(30px, 3.4vw, 46px);
+  font-size: clamp(28px, 3.2vw, 42px);
   line-height: 1.03;
   letter-spacing: 0.005em;
   margin: var(--sp-1) 0 0;
@@ -62,27 +66,112 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
 }
 
-/* The one scrollable region inside a menu column — lists and long forms.
-   Shrinks to fit when content is short (so a trailing detail panel sits
-   right after it, not stranded below empty space), is capped by the
-   column's remaining height and scrolls once content overflows it, but
-   never shrinks past two rows so it can't be squeezed to nothing on a
-   short viewport when a sibling (chips, a detail panel) needs room too. */
+/* The one scrollable region inside a menu column — lists and long forms. */
 .menu-scroll {
-  flex: 0 1 auto;
-  max-height: 100%;
-  min-height: 96px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-  /* a long list (46 cars in Brand Central) must never be squeezed to a slot by
-     the detail panel beneath it: it keeps at least 45 % of the body */
-  min-height: max(96px, 45%);
+}
+
+/* Brand Central / Garage: list + pinned purchase/sell strip */
+.menu-body.split {
+  gap: 0;
+}
+
+.menu-body.split .chip-row {
+  flex: 0 0 auto;
+  margin-bottom: var(--sp-3);
+}
+
+.menu-body.split .menu-scroll {
+  flex: 1 1 0;
+  min-height: 120px;
+  padding-bottom: var(--sp-3);
+}
+
+.menu-body.split .dealer-detail,
+.menu-body.split .garage-detail {
+  flex: 0 0 auto;
+  max-height: min(42vh, 340px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-3);
+  margin-top: var(--sp-1);
+}
+
+.detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.detail-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0 0;
+  margin-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+  background: linear-gradient(to top, rgba(8, 9, 12, 0.92) 70%, transparent);
+}
+
+.detail-actions .detail-price {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.detail-actions .detail-price.afford {
+  color: var(--text);
+}
+
+.detail-actions .detail-price.short {
+  color: var(--accent);
+}
+
+.detail-actions .gt-btn {
+  flex: 0 0 auto;
+  min-width: 9.5em;
+}
+
+.detail-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-1);
+}
+
+.detail-heading .detail-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(18px, 2vw, 22px);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+.detail-heading .pill {
+  flex: 0 0 auto;
 }
 
 /* ---------- Home top bar ---------- */
@@ -251,22 +340,12 @@
   }
 }
 
-/* Detail panels under a list (Brand Central, garage) take what the list leaves
-   and scroll on their own instead of pushing the list out of view. */
-.dealer-detail,
-.garage-detail {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-}
-
-.dealer-detail > .card-sub,
-.garage-detail > .card-sub {
+.dealer-detail .card-sub,
+.garage-detail .card-sub,
+.detail-scroll > .card-sub {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: var(--sp-2);
 }

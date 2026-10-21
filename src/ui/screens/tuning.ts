@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtPP } from '../format';
 import { makeButton, makeMenuShell, makeSlider } from '../widgets';
+import type { MenuShell } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { UpgradeInfo } from '../UiContract';
@@ -17,6 +18,7 @@ function installedStageIndex(kind: UpgradeInfo['kind'], owned: OwnedCar): number
 /** Tuning shop: upgrade shopping for the selected car, plus live setup sliders. */
 class TuningScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private carName = el('div', 'card-title', '');
   private ppReadout = el('div', 'card-sub', '');
   private body = el('div', 'menu-scroll');
@@ -25,9 +27,14 @@ class TuningScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-tuning');
-    const shell = makeMenuShell('Upgrade & setup', 'Tuning Shop');
-    shell.body.append(this.carName, this.ppReadout, this.body);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Upgrade & setup', 'Tuning Shop', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.append(this.carName, this.ppReadout, this.body);
+    this.el.appendChild(this.shell.el);
   }
 
   onShow(): void {
@@ -147,6 +154,7 @@ class TuningScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.body);
     const idx = this.ctx.facade.save.selectedCar;
     const owned = this.ctx.facade.save.garage[idx];

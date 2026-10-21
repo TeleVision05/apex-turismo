@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtHp, fmtKg, fmtKm, fmtNm, fmtPP, titleCase } from '../format';
 import { makeButton, makeListRow, makeMenuShell, makeSwatch } from '../widgets';
+import type { MenuShell } from '../widgets';
 import { POWER_STAGES, WEIGHT_STAGES } from '../../physics/Tuning';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -16,8 +17,11 @@ function statRow(label: string, value: string): HTMLElement {
 /** Garage: owned car list, colour picker, sell flow and a live stat card. */
 class GarageScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private list = el('div', 'menu-scroll');
   private detail = el('div', 'garage-detail');
+  private detailScroll = el('div', 'detail-scroll');
+  private detailActions = el('div', 'detail-actions');
   private highlightIndex = 0;
   private sellConfirm = false;
   private notice: string | null = null;
@@ -25,9 +29,16 @@ class GarageScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-garage');
-    const shell = makeMenuShell('Owned cars', 'Garage');
-    shell.body.append(this.list, this.detail);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Owned cars', 'Garage', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.classList.add('split');
+    this.detail.append(this.detailScroll, this.detailActions);
+    this.shell.body.append(this.list, this.detail);
+    this.el.appendChild(this.shell.el);
   }
 
   onShow(): void {
@@ -74,25 +85,9 @@ class GarageScreen implements Screen {
     this.ctx.refresh();
   }
 
-  private buildSellBox(idx: number, spec: { name: string }): void {
-    const box = el('div', 'confirm-box');
-    box.appendChild(
-      el('div', 'confirm-text', `Sell ${spec.name} for credits? This cannot be undone.`),
-    );
-    const row = el('div', 'form-actions');
-    const confirmBtn = makeButton('Confirm sale', () => this.sellNow(idx), { className: 'danger' });
-    const cancelBtn = makeButton('Cancel', () => {
-      this.sellConfirm = false;
-      this.rebuild();
-    });
-    row.append(confirmBtn.el, cancelBtn.el);
-    box.appendChild(row);
-    this.detail.appendChild(box);
-    this.focusItems.push(confirmBtn.item, cancelBtn.item);
-  }
-
   private buildDetail(owned: OwnedCar, idx: number): void {
-    clear(this.detail);
+    clear(this.detailScroll);
+    clear(this.detailActions);
     const spec = this.ctx.facade.ownedCarSpec(owned);
     const pp = this.ctx.facade.performancePoints(spec, owned.tuning);
     const kw = this.ctx.facade.peakPowerKw(spec, owned.tuning);
@@ -100,27 +95,26 @@ class GarageScreen implements Screen {
       Math.max(...spec.torqueCurve.map((p) => p.nm)) * POWER_STAGES[owned.tuning.powerStage];
     const mass = spec.massKg * WEIGHT_STAGES[owned.tuning.weightStage];
 
-    if (this.ctx.facade.save.selectedCar !== idx) {
-      const btn = makeButton('Select this car', () => this.selectCar(idx), {
-        className: 'primary',
-      });
-      this.detail.appendChild(btn.el);
-      this.focusItems.push(btn.item);
-    } else {
-      this.detail.appendChild(el('div', 'notice info', 'Currently selected'));
+    const heading = el('div', 'detail-heading');
+    heading.append(el('div', 'detail-name', spec.name), el('div', 'pill pp', fmtPP(pp)));
+    this.detailScroll.appendChild(heading);
+    this.detailScroll.appendChild(
+      el('div', 'card-sub', `${spec.maker} · ${spec.carClass} · ${fmtKm(owned.odometerM)}`),
+    );
+
+    if (this.ctx.facade.save.selectedCar === idx) {
+      this.detailScroll.appendChild(el('div', 'notice info', 'Currently selected'));
     }
 
-    this.detail.appendChild(el('div', 'section-label', 'Colour'));
+    this.detailScroll.appendChild(el('div', 'section-label', 'Colour'));
     const swatchRow = el('div', 'swatch-row');
     for (const color of spec.colors) {
       const w = makeSwatch(color, color === owned.tuning.color, () => this.setColor(idx, color));
       swatchRow.appendChild(w.el);
       this.focusItems.push(w.item);
     }
-    this.detail.appendChild(swatchRow);
+    this.detailScroll.appendChild(swatchRow);
 
-    const stat = el('div', 'stat-card');
-    stat.appendChild(el('div', 'section-label', 'Performance'));
     const grid = el('div', 'stat-grid');
     grid.append(
       statRow('Power', fmtHp(kw)),
@@ -130,26 +124,41 @@ class GarageScreen implements Screen {
       statRow('Tyres', titleCase(owned.tuning.tyres)),
       statRow('PP', fmtPP(pp)),
     );
-    stat.appendChild(grid);
-    this.detail.appendChild(stat);
+    this.detailScroll.appendChild(grid);
 
-    if (this.notice) this.detail.appendChild(el('div', 'notice error', this.notice));
+    if (this.notice) this.detailScroll.appendChild(el('div', 'notice error', this.notice));
 
     if (this.sellConfirm) {
-      this.buildSellBox(idx, spec);
-    } else {
-      const sellBtn = makeButton(
-        'Sell car',
-        () => {
-          this.sellConfirm = true;
-          this.notice = null;
-          this.rebuild();
-        },
-        { className: 'danger', disabled: this.ctx.facade.save.garage.length <= 1 },
-      );
-      this.detail.appendChild(sellBtn.el);
-      this.focusItems.push(sellBtn.item);
+      this.detailActions.appendChild(el('div', 'detail-price afford', `Sell ${spec.name}?`));
+      const confirmBtn = makeButton('Confirm', () => this.sellNow(idx), { className: 'danger' });
+      const cancelBtn = makeButton('Cancel', () => {
+        this.sellConfirm = false;
+        this.rebuild();
+      });
+      this.detailActions.append(confirmBtn.el, cancelBtn.el);
+      this.focusItems.push(confirmBtn.item, cancelBtn.item);
+      return;
     }
+
+    if (this.ctx.facade.save.selectedCar !== idx) {
+      const selectBtn = makeButton('Select car', () => this.selectCar(idx), {
+        className: 'primary',
+      });
+      this.detailActions.appendChild(selectBtn.el);
+      this.focusItems.push(selectBtn.item);
+    }
+
+    const sellBtn = makeButton(
+      'Sell car',
+      () => {
+        this.sellConfirm = true;
+        this.notice = null;
+        this.rebuild();
+      },
+      { className: 'danger', disabled: this.ctx.facade.save.garage.length <= 1 },
+    );
+    this.detailActions.appendChild(sellBtn.el);
+    this.focusItems.push(sellBtn.item);
   }
 
   private buildCard(owned: OwnedCar, idx: number): void {
@@ -181,6 +190,7 @@ class GarageScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.list);
     const { garage } = this.ctx.facade.save;
     garage.forEach((owned, idx) => this.buildCard(owned, idx));

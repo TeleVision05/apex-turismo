@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { formatLapTime } from '../../core/math';
 import { makeButton, makeCycle, makeMenuShell } from '../widgets';
+import type { MenuShell } from '../widgets';
 import { TIME_OF_DAY_OPTIONS, TRANSMISSION_OPTIONS } from './raceOptions';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -9,15 +10,21 @@ import type { RaceConfig, TimeOfDay, Transmission } from '../../core/types';
 /** Time Trial: track + time of day + transmission, no traffic, 99 laps. */
 class TimeTrialScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private state: { trackId: string; timeOfDay: TimeOfDay; transmission: Transmission };
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-timetrial');
-    const shell = makeMenuShell('No traffic', 'Time Trial');
-    shell.body.appendChild(this.body);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('No traffic', 'Time Trial', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.appendChild(this.body);
+    this.el.appendChild(this.shell.el);
     this.state = {
       trackId: '',
       timeOfDay: 'noon',
@@ -83,6 +90,7 @@ class TimeTrialScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.body);
     const tracks = this.ctx.facade.tracks();
     if (!tracks.find((t) => t.id === this.state.trackId)) this.state.trackId = tracks[0]?.id ?? '';

@@ -1,5 +1,6 @@
 import { el, clear } from '../dom';
 import { makeButton, makeMenuShell } from '../widgets';
+import type { MenuShell } from '../widgets';
 import { ACTION_LABELS, KEYBOARD, MAPPABLE_ACTIONS } from '../../core/InputBindings';
 import { InputManager } from '../../core/Input';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
@@ -17,6 +18,7 @@ function keyLabel(code: string): string {
 /** Controls: connected devices, keyboard reference and a per-device remap wizard. */
 class ControlsScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private body = el('div', 'menu-scroll');
   private overlay = el('div', 'capture-overlay hidden panel');
   private overlayText = el('div', 'capture-text', '');
@@ -28,9 +30,15 @@ class ControlsScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-controls');
-    const shell = makeMenuShell('Input', 'Controls', { wide: true });
-    shell.body.appendChild(this.body);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Input', 'Controls', {
+      wide: true,
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.appendChild(this.body);
+    this.el.appendChild(this.shell.el);
     this.overlay.append(
       this.overlayText,
       el('div', 'capture-hint', 'Move Back / press Backspace to cancel'),
@@ -193,6 +201,7 @@ class ControlsScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.body);
     this.devices = this.ctx.facade.inputDevices();
     this.buildDeviceList();

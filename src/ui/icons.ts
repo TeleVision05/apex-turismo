@@ -16,6 +16,7 @@ export type IconName =
   | 'gamepad'
   | 'coin'
   | 'emblem'
+  | 'back'
   | 'pause'
   | 'resume'
   | 'restart'
@@ -25,6 +26,10 @@ export type IconName =
 
 /** Raw <path>/<circle>/... markup for each icon, at viewBox 0 0 24 24. */
 const ICON_PATHS: Record<IconName, string> = {
+  back: `
+    <path d="M19 12H6"/>
+    <path d="M10.5 6.5L5 12l5.5 5.5"/>
+  `,
   world: `
     <circle cx="12" cy="12" r="8.5"/>
     <ellipse cx="12" cy="12" rx="3.6" ry="8.5"/>

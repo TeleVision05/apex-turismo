@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtCredits, fmtHp, fmtPP } from '../format';
 import { makeButton, makeChip, makeListRow, makeMenuShell, makeSwatch } from '../widgets';
+import type { MenuShell } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { CarClass, CarSpec, CarTuning } from '../../core/types';
@@ -39,9 +40,12 @@ function statBox(label: string, value: string): HTMLElement {
 /** Brand Central: every car grouped by maker, filterable by class, buy + colour flow. */
 class DealershipScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private chipRow = el('div', 'chip-row');
   private list = el('div', 'menu-scroll');
   private detail = el('div', 'dealer-detail');
+  private detailScroll = el('div', 'detail-scroll');
+  private detailActions = el('div', 'detail-actions');
   private cars: CarSpec[] = [];
   private classFilter: CarClass | 'All' = 'All';
   private highlightId = '';
@@ -51,9 +55,16 @@ class DealershipScreen implements Screen {
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-dealership');
-    const shell = makeMenuShell('Cars', 'Brand Central');
-    shell.body.append(this.chipRow, this.list, this.detail);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Cars', 'Brand Central', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.classList.add('split');
+    this.detail.append(this.detailScroll, this.detailActions);
+    this.shell.body.append(this.chipRow, this.list, this.detail);
+    this.el.appendChild(this.shell.el);
   }
 
   onShow(): void {
@@ -86,19 +97,25 @@ class DealershipScreen implements Screen {
     this.ctx.refresh();
   }
 
-  private buildStats(spec: CarSpec): void {
+  private buildDetail(spec: CarSpec): void {
+    clear(this.detailScroll);
+    clear(this.detailActions);
+
+    const heading = el('div', 'detail-heading');
+    heading.append(el('div', 'detail-name', spec.name), el('div', 'pill class', spec.carClass));
+    this.detailScroll.appendChild(heading);
+    this.detailScroll.appendChild(el('div', 'card-sub', spec.description));
+
     const grid = el('div', 'stat-grid');
     grid.append(
-      statBox('Price', fmtCredits(spec.priceCr)),
-      statBox('Class', spec.carClass),
       statBox('PP', fmtPP(this.ctx.facade.performancePoints(spec, stockTuning(spec)))),
       statBox('Power', fmtHp(this.ctx.facade.peakPowerKw(spec, stockTuning(spec)))),
+      statBox('Drivetrain', spec.drivetrain),
+      statBox('Weight', `${Math.round(spec.massKg)} kg`),
     );
-    this.detail.appendChild(grid);
-  }
+    this.detailScroll.appendChild(grid);
 
-  private buildSwatches(spec: CarSpec): void {
-    this.detail.appendChild(el('div', 'section-label', 'Colour'));
+    this.detailScroll.appendChild(el('div', 'section-label', 'Colour'));
     const swatchRow = el('div', 'swatch-row');
     for (const color of spec.colors) {
       const w = makeSwatch(color, color === this.chosenColor, () => {
@@ -109,27 +126,26 @@ class DealershipScreen implements Screen {
       swatchRow.appendChild(w.el);
       this.focusItems.push(w.item);
     }
-    this.detail.appendChild(swatchRow);
-  }
+    this.detailScroll.appendChild(swatchRow);
 
-  private buildDetail(spec: CarSpec): void {
-    clear(this.detail);
-    this.detail.appendChild(el('div', 'section-label', spec.name));
-    this.detail.appendChild(el('div', 'card-sub', spec.description));
-    this.buildStats(spec);
-    this.buildSwatches(spec);
     if (this.notice)
-      this.detail.appendChild(el('div', `notice ${this.notice.kind}`, this.notice.text));
+      this.detailScroll.appendChild(el('div', `notice ${this.notice.kind}`, this.notice.text));
     if (this.isOwned(spec.id))
-      this.detail.appendChild(el('div', 'notice info', 'You already own this car'));
+      this.detailScroll.appendChild(el('div', 'notice info', 'Already in your garage'));
+
+    const credits = this.ctx.facade.save.credits;
+    const canAfford = credits >= spec.priceCr;
+    const price = el(
+      'div',
+      `detail-price ${canAfford ? 'afford' : 'short'}`,
+      fmtCredits(spec.priceCr),
+    );
     const buyBtn = makeButton(
       this.isOwned(spec.id) ? 'Buy another' : 'Buy car',
       () => this.buyNow(spec),
-      {
-        className: 'primary',
-      },
+      { className: 'primary' },
     );
-    this.detail.appendChild(buyBtn.el);
+    this.detailActions.append(price, buyBtn.el);
     this.focusItems.push(buyBtn.item);
   }
 
@@ -192,6 +208,7 @@ class DealershipScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.list);
     this.cars = this.ctx.facade.cars();
     this.buildChips();
@@ -210,9 +227,10 @@ class DealershipScreen implements Screen {
       this.ctx.facade.showroom(highlighted.id, this.chosenColor);
       this.buildDetail(highlighted);
     } else {
-      clear(this.detail);
+      clear(this.detailScroll);
+      clear(this.detailActions);
       this.ctx.facade.showroom(null);
-      this.detail.appendChild(el('div', 'notice info', 'No cars in this class'));
+      this.detailScroll.appendChild(el('div', 'notice info', 'No cars in this class'));
     }
   }
 }

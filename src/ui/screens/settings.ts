@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtPct, titleCase } from '../format';
 import { makeButton, makeCycle, makeMenuShell, makeSlider, makeToggle } from '../widgets';
+import type { MenuShell } from '../widgets';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
 import type { CameraMode, GraphicsSettings } from '../../core/types';
@@ -33,15 +34,21 @@ const TRANSMISSION_OPTIONS = [
 /** Settings: graphics, audio, assists, transmission/units/camera and controls. */
 class SettingsScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private body = el('div', 'menu-scroll form-rows');
   private focusItems: FocusItem[] = [];
   private resetConfirm = false;
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-settings');
-    const shell = makeMenuShell('Options', 'Settings');
-    shell.body.appendChild(this.body);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Options', 'Settings', {
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.appendChild(this.body);
+    this.el.appendChild(this.shell.el);
   }
 
   onShow(): void {
@@ -235,6 +242,7 @@ class SettingsScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.body);
     this.buildGraphics();
     this.buildAudio();

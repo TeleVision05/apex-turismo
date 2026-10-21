@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { fmtCredits } from '../format';
 import { makeListRow, makeMenuShell } from '../widgets';
+import type { MenuShell } from '../widgets';
 import { eventById } from '../../data/events';
 import type { Screen, ScreenContext, FocusPlan } from '../Screen';
 import type { FocusItem } from '../Focus';
@@ -9,15 +10,22 @@ import type { RaceEvent } from '../../data/events';
 /** World Circuits: series-grouped event list with unlock gating. */
 class EventsScreen implements Screen {
   readonly el: HTMLElement;
+  private shell: MenuShell;
   private notice = el('div', 'notice error hidden');
   private list = el('div', 'menu-scroll');
   private focusItems: FocusItem[] = [];
 
   constructor(private ctx: ScreenContext) {
     this.el = el('div', 'screen screen-events');
-    const shell = makeMenuShell('Career', 'World Circuits', { wide: true });
-    shell.body.append(this.notice, this.list);
-    this.el.appendChild(shell.el);
+    this.shell = makeMenuShell('Career', 'World Circuits', {
+      wide: true,
+      onBack: () => {
+        this.ctx.sound('back');
+        this.ctx.back();
+      },
+    });
+    this.shell.body.append(this.notice, this.list);
+    this.el.appendChild(this.shell.el);
   }
 
   onShow(): void {
@@ -92,6 +100,7 @@ class EventsScreen implements Screen {
 
   private rebuild(): void {
     this.focusItems = [];
+    if (this.shell.backItem) this.focusItems.push(this.shell.backItem);
     clear(this.list);
     this.notice.classList.add('hidden');
     const bySeries = new Map<string, RaceEvent[]>();
